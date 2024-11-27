@@ -21,6 +21,12 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from tabulate import tabulate
 
+DF_COL = ['hour', 'namespace', 'slow_query_count', 'durationMillis','planningTimeMicros', 'has_sort_stage', 'query_targeting',
+             'plan_summary', 'command_shape', 'writeConflicts', 'skip', 'limit', 'appName', 'changestream',
+             'keys_examined', 'docs_examined', 'nreturned', 'cursorid', 'nBatches', 'numYields',
+             'totalOplogSlotDurationMicros', 'waitForWriteConcernDurationMillis', 'ninserted', 'nMatched', 'nModified',
+             'nUpserted', 'keysInserted', 'bytesReslen', 'flowControl_acquireCount', 'flowControl_timeAcquiringMicros',
+             'storage_data_bytesRead', 'storage_data_timeReadingMicros', 'cmdType']
 
 # Global variables from context values
 USING_API = False
@@ -50,21 +56,23 @@ GENERATE_MD = False
 #------------------------------------------------------------------------------------
 # Pdf related
 def render_toc(pdf, outline):
-    pdf.y += 50
+    pdf.y += 10
     pdf.set_font("Helvetica", size=16)
     pdf.underline = True
-    pdf.x =5
+    pdf.x =0
     pdf.p("Table of contents:")
     pdf.underline = False
-    pdf.y += 20
-    pdf.set_font("Courier", size=12)
+    pdf.y += 2
+    pdf.set_font("Courier", size=5)
     for section in outline:
+        pdf.x =0
         link = pdf.add_link(page=section.page_number)
         pdf.p(
-            f'{" " * section.level * 2} {section.name} {"." * (60 - section.level*2 - len(section.name))} {section.page_number}',
-            align="C",
+            f'{" " * section.level} {section.name} {"." * (150 - section.level - len(section.name))} {section.page_number}',
+            align="L",
             link=link,
         )
+
 
 
 class PDF(FPDF):
@@ -79,36 +87,14 @@ class PDF(FPDF):
             TextStyle(
                 font_family="Times",
                 font_style="B",
-                font_size_pt=24,
+                font_size_pt=16,
                 color=128,
                 underline=True,
                 t_margin=10,
-                l_margin=10,
+                l_margin=2,
                 b_margin=0,
             ),
             # Level 1 subtitles:
-            TextStyle(
-                font_family="Times",
-                font_style="B",
-                font_size_pt=20,
-                color=128,
-                underline=True,
-                t_margin=10,
-                l_margin=20,
-                b_margin=5,
-            ),
-            # Level 2 subtitles:
-            TextStyle(
-                font_family="Times",
-                font_style="B",
-                font_size_pt=18,
-                color=128,
-                underline=True,
-                t_margin=10,
-                l_margin=30,
-                b_margin=10,
-            ),
-            # Level 3 subtitles:
             TextStyle(
                 font_family="Times",
                 font_style="B",
@@ -116,18 +102,40 @@ class PDF(FPDF):
                 color=128,
                 underline=True,
                 t_margin=10,
-                l_margin=50,
+                l_margin=10,
+                b_margin=5,
+            ),
+            # Level 2 subtitles:
+            TextStyle(
+                font_family="Times",
+                font_style="B",
+                font_size_pt=12,
+                color=128,
+                underline=True,
+                t_margin=10,
+                l_margin=4,
+                b_margin=10,
+            ),
+            # Level 3 subtitles:
+            TextStyle(
+                font_family="Times",
+                font_style="B",
+                font_size_pt=8,
+                color=128,
+                underline=True,
+                t_margin=10,
+                l_margin=6,
                 b_margin=10,
             ),
             # Level 4 subtitles:
             TextStyle(
                 font_family="Times",
                 font_style="",
-                font_size_pt=10,
+                font_size_pt=4,
                 color=128,
                 underline=True,
                 t_margin=10,
-                l_margin=60,
+                l_margin=8,
                 b_margin=10,
             ),
         )
@@ -172,85 +180,6 @@ class PDF(FPDF):
         self.start_section(subchapter,level=4)
         self.ln(10)
 
-    def convertTimeToHumanReadable(self,name, val):
-        """
-            Convert time values to a human-readable format based on the column name.
-
-            Parameters:
-            - name: str, the name of the column.
-            - val: numeric, the time value to convert.
-
-            Returns:
-            - str, the converted time in a human-readable format.
-        """
-        if name.endswith('Micros'):
-            # Convert microseconds to a detailed time format
-            micros = val % 1_000
-            val //= 1_000
-            millis = val % 1_000
-            val //= 1_000
-            seconds = val % 60
-            val //= 60
-            minutes = val % 60
-            val //= 60
-            hours = val
-        elif name.endswith('Millis'):
-            # Convert milliseconds to a detailed time format
-            millis = val % 1_000
-            val //= 1_000
-            seconds = val % 60
-            val //= 60
-            minutes = val % 60
-            val //= 60
-            hours = val
-            micros = 0
-        else:
-            return f"{val} (unknown unit)"
-        # Construct the human-readable time string
-        time_str = ""
-        if hours > 0:
-            time_str += f"{round(hours)}H"
-        if minutes > 0:
-            time_str += f"{round(minutes)}min"
-        if seconds > 0:
-            time_str += f"{round(seconds)}s"
-        if millis > 0:
-            time_str += f"{round(millis)}ms"
-        if micros > 0:
-            time_str += f"{round(micros)}micros"
-        return time_str or "0s"
-
-    def convertToHumanReadable(self, name, val):
-        if name.endswith('Millis') or name.endswith('Micros'):
-            return str(self.convertTimeToHumanReadable(name, val))
-
-        # Check if the name contains 'bytes' and convert to human-readable size
-        if 'bytes' in name.lower():
-            return self.convertBytesToHumanReadable(val)
-
-        # Check if val is a list or tuple
-        if isinstance(val, (list, tuple)):
-            if not val:  # If the list or tuple is empty
-                return ''
-            elif len(val) == 1:  # If it contains a single element
-                return str(val[0])
-            else:  # If it contains multiple elements
-                return ', '.join(map(str, val))
-
-        # Check if val is a number and round it
-        if isinstance(val, (int, float)):
-            val = round(val)
-
-        return str(val)
-    def convertBytesToHumanReadable(self, num_bytes):
-        """
-        Convert a byte value to a human-readable format (e.g., KB, MB, GB).
-        """
-        for unit in ['bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']:
-            if abs(num_bytes) < 1024.0:
-                return f"{num_bytes:.2f} {unit}"
-            num_bytes /= 1024.0
-        return f"{num_bytes:.2f} YB"
 
     def clean_name(self,name):
         """
@@ -293,7 +222,7 @@ class PDF(FPDF):
                 # Store the value in the appropriate category
                 category = col.rsplit('_', 1)[1]
                 if row.get(col, 0)!=0 :
-                    aggregated_values[base_name][category] = self.convertToHumanReadable(base_name,row.get(col, 0))
+                    aggregated_values[base_name][category] = convertToHumanReadable(base_name,row.get(col, 0))
 
         # Process unique columns
         for col in columns:
@@ -306,7 +235,7 @@ class PDF(FPDF):
                 self.cell(col_width-30, row_height, self.clean_name(col), border=1)
                 # Add the value
                 self.set_font('helvetica', '', 8)
-                self.cell(col_width+30, row_height, self.convertToHumanReadable(col,value), border=1)
+                self.cell(col_width+30, row_height, convertToHumanReadable(col,value), border=1)
                 self.ln(row_height)
         # Add table header and rows
         for base_name, values in aggregated_values.items():
@@ -419,8 +348,12 @@ class Report():
             self.lpdf.sub2Chapter_title(subchapter)
 
     def sub3Chapter_title(self, subchapter):
-       if GENERATE_PDF_REPORT :
-           self.lpdf.sub3Chapter_title(subchapter)
+        if GENERATE_PDF_REPORT :
+            self.lpdf.sub3Chapter_title(subchapter)
+
+    def sub4Chapter_title(self, subchapter):
+        if GENERATE_PDF_REPORT :
+            self.lpdf.sub4Chapter_title(subchapter)
 
     def chapter_body(self, body):
         if GENERATE_PDF_REPORT :
@@ -474,6 +407,104 @@ def atlas_request(op, fpath, fdate, arg):
     #print(f"{op} response: {response.text}")
     return json.loads(response.text)
 
+def convertTimeToHumanReadable(name, val, rounded=False):
+    """
+    Convert time values to a human-readable format based on the column name.
+    Parameters:
+    - name: str, the name of the column.
+    - val: numeric, the time value to convert.
+    - rounded: bool, whether to round the time components.
+    Returns:
+    - str, the converted time in a human-readable format.
+    """
+    if name.endswith('Micros'):
+        # Convert microseconds to a detailed time format
+        micros = val % 1_000
+        val //= 1_000
+        millis = val % 1_000
+        val //= 1_000
+        seconds = val % 60
+        val //= 60
+        minutes = val % 60
+        val //= 60
+        hours = val
+    elif name.endswith('Millis'):
+        # Convert milliseconds to a detailed time format
+        millis = val % 1_000
+        val //= 1_000
+        seconds = val % 60
+        val //= 60
+        minutes = val % 60
+        val //= 60
+        hours = val
+        micros = 0
+    else:
+        return f"{val} (unknown unit)"
+    if rounded:
+        # Round microseconds to milliseconds if there are milliseconds or larger units
+        if micros >= 500 and (millis > 0 or seconds > 0 or minutes > 0 or hours > 0):
+            millis += 1
+        micros = 0
+        # Round milliseconds to seconds if there are seconds or larger units
+        if millis >= 500 and (seconds > 0 or minutes > 0 or hours > 0):
+            seconds += 1
+        millis = 0
+        # Round seconds to minutes if there are minutes or larger units
+        if seconds >= 30 and (minutes > 0 or hours > 0):
+            minutes += 1
+        seconds = 0
+        # Convert 60 minutes to 1 hour
+        if minutes >= 60:
+            hours += minutes // 60
+            minutes = minutes % 60
+    # Construct the human-readable time string
+    time_str = ""
+    if hours > 0:
+        time_str += f"{hours}H"
+    if minutes > 0:
+        time_str += f"{minutes}min"
+    if seconds > 0:
+        time_str += f"{seconds}s"
+    if millis > 0:
+        time_str += f"{millis}ms"
+    if micros > 0:
+        time_str += f"{micros}micros"
+    return time_str or "0s"
+
+def convertToHumanReadable(name, val, rounded=False):
+        if name.endswith('Millis') or name.endswith('Micros'):
+            return str(convertTimeToHumanReadable(name, val, rounded))
+
+        # Check if the name contains 'bytes' and convert to human-readable size
+        if 'bytes' in name.lower():
+            return convertBytesToHumanReadable(val)
+
+        # Check if val is a list or tuple
+        if isinstance(val, (list, tuple)):
+            if not val:  # If the list or tuple is empty
+                return ''
+            elif len(val) == 1:  # If it contains a single element
+                return str(val[0])
+            else:  # If it contains multiple elements
+                return ', '.join(map(str, val))
+
+        # Check if val is a number and round it
+        if isinstance(val, (int, float)):
+            val = round(val)
+        return str(val)
+
+def convertBytesToHumanReadable(num_bytes):
+        """
+        Convert a byte value to a human-readable format (e.g., KB, MB, GB).
+        """
+        for unit in ['bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']:
+            if abs(num_bytes) < 1024.0:
+                return f"{num_bytes:.2f} {unit}"
+            num_bytes /= 1024.0
+        return f"{num_bytes:.2f} YB"
+
+
+
 # retrieve slow queries
 def retrieveLast24HSlowQueriesFromCluster(groupId,processId, output_file_path):
     path=f"/groups/{groupId}/processes/{processId}/performanceAdvisor/slowQueryLogs"
@@ -490,7 +521,7 @@ def retrieveLast24HSlowQueriesFromCluster(groupId,processId, output_file_path):
             # Skip lines that are not valid JSON
             continue
     print(f"Extracted slow queries have been saved to {output_file_path}")
-    return pd.DataFrame(data, columns=['hour', 'namespace', 'slow_query_count', 'durationMillis', 'has_sort_stage', 'query_targeting', 'plan_summary', 'command_shape', 'writeConflicts','skip','limit','appName','changestream','keys_examined','docs_examined','nreturned','cursorid','nBatches','numYields','totalOplogSlotDurationMicros','waitForWriteConcernDurationMillis'])
+    return pd.DataFrame(data, columns=DF_COL)
 
 #------------------------------------------------------------------------------------
 # Function for extracting from File :
@@ -513,7 +544,7 @@ def extract_slow_queries(log_file_path, output_file_path):
             output_file.write(query)
 
     print(f"Extracted slow queries have been saved to {output_file_path}")
-    return pd.DataFrame(data, columns=['hour', 'namespace', 'slow_query_count', 'durationMillis', 'has_sort_stage', 'query_targeting', 'plan_summary', 'command_shape', 'writeConflicts','skip','limit','appName','changestream','keys_examined','docs_examined','nreturned','cursorid','nBatches','numYields','totalOplogSlotDurationMicros','waitForWriteConcernDurationMillis','ninserted','keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros','storage_data_bytesRead','storage_data_timeReadingMicros'])
+    return pd.DataFrame(data, columns=DF_COL)
 
 def check_change_stream(document):
     changestream = False
@@ -537,39 +568,58 @@ def check_change_stream(document):
 def extractSlowQueryInfos(data, line, log_entry, slow_queries):
     slow_queries.append(line)
     # Extract relevant fields
-    namespace = log_entry.get("attr", {}).get("ns", "unknown")
-    totalOplogSlotDurationMicros = log_entry.get("attr", {}).get("totalOplogSlotDurationMicros", 0)
-    waitForWriteConcernDurationMillis = log_entry.get("attr", {}).get("waitForWriteConcernDurationMillis", 0)
 
-    duration = log_entry.get("attr", {}).get("durationMillis", 0)
-    has_sort_stage = 1 if log_entry.get("attr", {}).get("hasSortStage", False) else 0
-    keys_examined = log_entry.get("attr", {}).get("keysExamined", 0)
-    docs_examined = log_entry.get("attr", {}).get("docsExamined", 0)
-    nreturned = log_entry.get("attr", {}).get("nreturned", 0)  # Default to 0 if not defined
-    appName = log_entry.get("attr", {}).get("appName", "n")
+    # Access the 'attr' dictionary
+    attr = log_entry.get('attr', {})
+    # Get the 'type' value and convert it to lowercase
+    type_value = attr.get('type', 'unknown').lower()
+
+    # Access the 'command' dictionary
+    command = attr.get('command', {})
+
+    # Get the first attribute name in the 'command' dictionary
+    first_attribute_name = next(iter(command), 'unknown')
+
+    # Return the formatted string
+    cmdType = f"{type_value}.{first_attribute_name}"
+
+    namespace = attr.get("ns", "unknown")
+    totalOplogSlotDurationMicros = attr.get("totalOplogSlotDurationMicros", 0)
+    waitForWriteConcernDurationMillis = attr.get("waitForWriteConcernDurationMillis", 0)
+
+    duration = attr.get("durationMillis", 0)
+    planningTimeMicros = attr.get("planningTimeMicros", 0)
+    has_sort_stage = 1 if attr.get("hasSortStage", False) else 0
+    keys_examined = attr.get("keysExamined", 0)
+    docs_examined = attr.get("docsExamined", 0)
+    nreturned = attr.get("nreturned", 0)  # Default to 0 if not defined
+    appName = attr.get("appName", "n")
     query_targeting = max(keys_examined, docs_examined) / nreturned if nreturned > 0 else 0
     #if(query_targeting>1):
     #    print(f" query_targeting={query_targeting}, nreturned={nreturned} , keys_examined={keys_examined}, docs_examined={docs_examined}")
-    plan_summary = log_entry.get("attr", {}).get("planSummary", "n")
-    cursorid = log_entry.get("attr", {}).get("cursorid", 0)
-    nBatches = log_entry.get("attr", {}).get("nBatches", 0)
-    numYields = log_entry.get("attr", {}).get("numYields", 0)
+    plan_summary = attr.get("planSummary", "n")
+    cursorid = attr.get("cursorid", 0)
+    nBatches = attr.get("nBatches", 0)
+    numYields = attr.get("numYields", 0)
 
-    ninserted = log_entry.get("attr", {}).get("ninserted", 0)
-    keysInserted = log_entry.get("attr", {}).get("ninserted", 0)
-    reslen = log_entry.get("attr", {}).get("reslen", 0)
+    ninserted = attr.get("ninserted", 0)
+    keysInserted = attr.get("keysInserted", 0)
+    nMatched = attr.get("nMatched", 0)
+    nModified = attr.get("nModified", 0)
+    nUpserted = attr.get("nUpserted", 0)
+    reslen = attr.get("reslen", 0)
 
-    flowControl = log_entry.get("attr", {}).get("flowControl", {})
+    flowControl = attr.get("flowControl", {})
 
     flowControl_acquireCount = flowControl.get("acquireCount", 0)
     flowControl_timeAcquiringMicros = flowControl.get("timeAcquiringMicros", 0)
 
-    storage_data = log_entry.get("attr", {}).get("storage", {}).get("data", {})
+    storage_data = attr.get("storage", {}).get("data", {})
     storage_data_bytesRead = storage_data.get("bytesRead",0)
     storage_data_timeReadingMicros = storage_data.get("timeReadingMicros",0)
 
-    writeConflicts = log_entry.get("attr", {}).get("writeConflicts", 0)
-    command = log_entry.get("attr", {}).get("command", {})
+    writeConflicts = attr.get("writeConflicts", 0)
+    command = attr.get("command", {})
     skip = command.get("skip", 0)
     limit = command.get("limit", 0)
     changestream = check_change_stream(log_entry)
@@ -579,45 +629,8 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
     timestamp = log_entry.get("t", {}).get("$date")
     if timestamp:
         hour = datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:00:00')
-        data.append([hour, namespace, 1, duration, has_sort_stage, query_targeting, plan_summary, command_shape,writeConflicts,skip,limit,appName,changestream,keys_examined,docs_examined,nreturned,cursorid,nBatches,numYields,totalOplogSlotDurationMicros,waitForWriteConcernDurationMillis,ninserted,keysInserted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,storage_data_bytesRead,storage_data_timeReadingMicros])
+        data.append([hour, namespace, 1, duration,planningTimeMicros, has_sort_stage, query_targeting, plan_summary, command_shape,writeConflicts,skip,limit,appName,changestream,keys_examined,docs_examined,nreturned,cursorid,nBatches,numYields,totalOplogSlotDurationMicros,waitForWriteConcernDurationMillis,ninserted,nMatched,nModified,nUpserted,keysInserted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,storage_data_bytesRead,storage_data_timeReadingMicros,cmdType])
 
-
-#----------------------------------------------------------------------------------------
-# Common for extracting
-# def get_command_shape(command):
-#     def replace_values(obj):
-#         if isinstance(obj, dict):
-#             return {k: replace_values(v) for k, v in obj.items()}
-#         elif isinstance(obj, list):
-#             return [replace_values(i) for i in obj]
-#         elif isinstance(obj, int):
-#             return "int"
-#         elif isinstance(obj, float):
-#             return "float"
-#         elif isinstance(obj, str):
-#             return "string"
-#         else:
-#             return "other"
-#
-#     command_shape = replace_values(command)
-#     keys = list(command_shape.keys())
-#     if ("insert" in command_shape) and (keys.index("insert")==0) :
-#         command_shape["insert"] = command["insert"]
-#     if ("findAndModify" in command_shape) and (keys.index("findAndModify")==0):
-#         command_shape["findAndModify"] = command["findAndModify"]
-#     if ("update" in command_shape) and (keys.index("update")==0):
-#         command_shape["update"] = command["update"]
-#     if "collection" in command_shape:
-#         command_shape["collection"] = command["collection"]
-#     if "aggregate" in command_shape:
-#         command_shape["aggregate"] = command["aggregate"]
-#     if "find" in command_shape:
-#         command_shape["find"] = command["find"]
-#     if "ordered" in command_shape:
-#         command_shape["ordered"] = command["ordered"]
-#     if "$db" in command_shape:
-#         command_shape["$db"] = command["$db"]
-#     return json.dumps(command_shape)
 
 
 def get_command_shape(command):
@@ -725,15 +738,12 @@ def distinct_values(series):
 def process_row(index, row,report,columns):
     # Define a function to apply to each row
     report.add_page()
-    report.sub3Chapter_title(f"Index: {index}")
+    report.sub4Chapter_title(f"{convertToHumanReadable('cmdType',row['cmdType'])}({convertToHumanReadable('namespace',row['namespace'])}) : Time={convertToHumanReadable('durationMillis',row['durationMillis_total'],True)}, count={row['slow_query_count']}")
     report.add_json(row['command_shape'])
     report.add_page()
     report.table(row.drop(columns=['command_shape']), [col for col in columns if col != 'command_shape'])
 
 
-# def display_queries(report, df):
-#     for index, row in df.iterrows():
-#        process_row(index,row, report,df.columns)
 
 def display_queries(report, df):
     if df.empty :
@@ -782,13 +792,18 @@ def groupbyCommandShape(df):
         'has_sort_stage': ('has_sort_stage', lambda x: x.mode().iloc[0] if not x.mode().empty else False),
         'plan_summary': ('plan_summary', distinct_values),
         'app_name': ('appName', distinct_values),
-        'namespace': ('namespace', distinct_values)
+        'namespace': ('namespace', distinct_values),
+        'cmdType':('cmdType', distinct_values)
     }
     # Add min, max, avg, total for each specified column
-    for column in ['writeConflicts','durationMillis', 'keys_examined', 'docs_examined', 'nreturned', 'query_targeting','nBatches', 'numYields','skip','limit', 'waitForWriteConcernDurationMillis','totalOplogSlotDurationMicros','ninserted','keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros','storage_data_bytesRead','storage_data_timeReadingMicros','ninserted','keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros','storage_data_bytesRead','storage_data_timeReadingMicros']:
+    for column in ['writeConflicts','durationMillis','planningTimeMicros', 'keys_examined', 'docs_examined', 'nreturned', 'query_targeting',
+                   'nBatches', 'numYields','skip','limit', 'waitForWriteConcernDurationMillis','totalOplogSlotDurationMicros',
+                   'ninserted','keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros',
+                   'storage_data_bytesRead','storage_data_timeReadingMicros','ninserted', 'nMatched', 'nModified','nUpserted',
+                   'keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros',
+                   'storage_data_bytesRead','storage_data_timeReadingMicros']:
         agg_operations.update(minMaxAvgTtl(column))
     return df.groupby('command_shape').agg(**agg_operations).reset_index()
-
 
 def addToReport(df,prefix,report):
     report.chapter_title(f"Slow Query Report Summary : {prefix}")
