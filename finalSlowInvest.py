@@ -13,7 +13,8 @@ import requests
 from requests.auth import HTTPDigestAuth
 import json
 from collections import defaultdict
-from fpdf import FPDF, TextStyle, HTML2FPDF
+from fpdf import FPDF, TextStyle
+from fpdf.enums import XPos,YPos
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -44,7 +45,7 @@ OUTPUT_FILE_PATH = 'slow_queries.log'  # Path to the output file where slow quer
 # Generate cluster
 GENERATE_SLOW_QUERY_LOG = True
 GENERATE_PDF_REPORT = True
-
+GENERATE_MD = False
 
 #------------------------------------------------------------------------------------
 # Pdf related
@@ -52,6 +53,7 @@ def render_toc(pdf, outline):
     pdf.y += 50
     pdf.set_font("Helvetica", size=16)
     pdf.underline = True
+    pdf.x =5
     pdf.p("Table of contents:")
     pdf.underline = False
     pdf.y += 20
@@ -67,7 +69,8 @@ def render_toc(pdf, outline):
 
 class PDF(FPDF):
     def __init__(self, header_txt):
-        super().__init__()
+        super().__init__(orientation='P',unit='mm',format='A4')
+        self.isCover = False
         self.headerTxt = header_txt
         self.add_page()
         self.insert_toc_placeholder(render_toc, allow_extra_pages=True)
@@ -116,8 +119,24 @@ class PDF(FPDF):
                 l_margin=50,
                 b_margin=10,
             ),
+            # Level 4 subtitles:
+            TextStyle(
+                font_family="Times",
+                font_style="",
+                font_size_pt=10,
+                color=128,
+                underline=True,
+                t_margin=10,
+                l_margin=60,
+                b_margin=10,
+            ),
         )
 
+    # Override footer method
+    def footer(self):
+       # Page number with condition isCover
+       self.set_y(-15) # Position at 1.5 cm from bottom
+       self.cell(0, 10, 'Page  ' + str(self.page_no()) + '  |  {nb}', 0, new_x=XPos.RIGHT, new_y=YPos.TOP, align='C')
 
     def p(self, text, **kwargs):
         "Inserts a paragraph"
@@ -149,17 +168,158 @@ class PDF(FPDF):
     def sub3Chapter_title(self, subchapter):
         self.start_section(subchapter,level=3)
         self.ln(10)
+    def sub4Chapter_title(self, subchapter):
+        self.start_section(subchapter,level=4)
+        self.ln(10)
 
+    def convertTimeToHumanReadable(self,name, val):
+        """
+            Convert time values to a human-readable format based on the column name.
+
+            Parameters:
+            - name: str, the name of the column.
+            - val: numeric, the time value to convert.
+
+            Returns:
+            - str, the converted time in a human-readable format.
+        """
+        if name.endswith('Micros'):
+            # Convert microseconds to a detailed time format
+            micros = val % 1_000
+            val //= 1_000
+            millis = val % 1_000
+            val //= 1_000
+            seconds = val % 60
+            val //= 60
+            minutes = val % 60
+            val //= 60
+            hours = val
+        elif name.endswith('Millis'):
+            # Convert milliseconds to a detailed time format
+            millis = val % 1_000
+            val //= 1_000
+            seconds = val % 60
+            val //= 60
+            minutes = val % 60
+            val //= 60
+            hours = val
+            micros = 0
+        else:
+            return f"{val} (unknown unit)"
+        # Construct the human-readable time string
+        time_str = ""
+        if hours > 0:
+            time_str += f"{round(hours)}H"
+        if minutes > 0:
+            time_str += f"{round(minutes)}min"
+        if seconds > 0:
+            time_str += f"{round(seconds)}s"
+        if millis > 0:
+            time_str += f"{round(millis)}ms"
+        if micros > 0:
+            time_str += f"{round(micros)}micros"
+        return time_str or "0s"
+
+    def convertToHumanReadable(self, name, val):
+        if name.endswith('Millis') or name.endswith('Micros'):
+            return str(self.convertTimeToHumanReadable(name, val))
+
+        # Check if the name contains 'bytes' and convert to human-readable size
+        if 'bytes' in name.lower():
+            return self.convertBytesToHumanReadable(val)
+
+        # Check if val is a list or tuple
+        if isinstance(val, (list, tuple)):
+            if not val:  # If the list or tuple is empty
+                return ''
+            elif len(val) == 1:  # If it contains a single element
+                return str(val[0])
+            else:  # If it contains multiple elements
+                return ', '.join(map(str, val))
+
+        # Check if val is a number and round it
+        if isinstance(val, (int, float)):
+            val = round(val)
+
+        return str(val)
+    def convertBytesToHumanReadable(self, num_bytes):
+        """
+        Convert a byte value to a human-readable format (e.g., KB, MB, GB).
+        """
+        for unit in ['bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']:
+            if abs(num_bytes) < 1024.0:
+                return f"{num_bytes:.2f} {unit}"
+            num_bytes /= 1024.0
+        return f"{num_bytes:.2f} YB"
+
+    def clean_name(self,name):
+        """
+        Remove specific substrings from the name string.
+
+        - Remove 'bytes' if it appears anywhere in the name.
+        - Remove 'Micros' if the name ends with it.
+        - Remove 'Millis' if the name ends with it.
+
+        Parameters:
+        - name: str, the original name string.
+
+        Returns:
+        - str, the cleaned name string.
+        """
+        # Remove 'bytes' from anywhere in the name
+        name = name.replace('bytes', '')
+        # Remove 'Micros' if it ends with it
+        if name.endswith('Micros'):
+            name = name[:-6]  # Remove the last 6 characters
+        # Remove 'Millis' if it ends with it
+        if name.endswith('Millis'):
+            name = name[:-6]  # Remove the last 6 characters
+        # Strip any leading or trailing whitespace
+        return name.strip()
 
     def table(self, row, columns):
-        col_width = self.epw / 2  # Calculate column width
+        # Calculate column width based on the number of columns
+        num_columns = len(columns)
+        col_width = self.epw / 2
         row_height = self.font_size * 1.5
-        # Add table header
+        # Dictionary to hold aggregated values
+        aggregated_values = {}
+        # Process columns to aggregate min, max, avg, total
         for col in columns:
+            if col.endswith(('_min', '_max', '_avg', '_total')):
+                base_name = col.rsplit('_', 1)[0]
+                if base_name not in aggregated_values:
+                    aggregated_values[base_name] = {}
+                # Store the value in the appropriate category
+                category = col.rsplit('_', 1)[1]
+                if row.get(col, 0)!=0 :
+                    aggregated_values[base_name][category] = self.convertToHumanReadable(base_name,row.get(col, 0))
+
+        # Process unique columns
+        for col in columns:
+            if not col.endswith(('_min', '_max', '_avg', '_total')):
+                value = row.get(col, 0)
+                if value == 0 or value == '':
+                    continue
+                # Add header for the column
+                self.set_font('helvetica', 'B', 10)
+                self.cell(col_width-30, row_height, self.clean_name(col), border=1)
+                # Add the value
+                self.set_font('helvetica', '', 8)
+                self.cell(col_width+30, row_height, self.convertToHumanReadable(col,value), border=1)
+                self.ln(row_height)
+        # Add table header and rows
+        for base_name, values in aggregated_values.items():
+            # Check if all values are zero
+            if len(values)==0 or all(v == 0 for v in values.values()):
+                continue
+            # Add header for the base name
             self.set_font('helvetica', 'B', 10)
-            self.cell(col_width, row_height, col, border=1)
+            self.cell(col_width-30, row_height, self.clean_name(base_name), border=1)
+            # Construct the human-readable value string
+            value_str = ', '.join(f"{k}: {v}" for k, v in values.items() if v != 0)
             self.set_font('helvetica', '', 8)
-            self.cell(col_width, row_height, str(row[col]), border=1)
+            self.cell(col_width+30, row_height, value_str, border=1)
             self.ln(row_height)
 
 
@@ -330,7 +490,7 @@ def retrieveLast24HSlowQueriesFromCluster(groupId,processId, output_file_path):
             # Skip lines that are not valid JSON
             continue
     print(f"Extracted slow queries have been saved to {output_file_path}")
-    return pd.DataFrame(data, columns=['hour', 'namespace', 'slow_query_count', 'total_duration', 'has_sort_stage', 'query_targeting', 'plan_summary', 'command_shape', 'writeConflicts','skip','limit','appName','changestream','keys_examined','docs_examined','nreturned','cursorid','nBatches','numYields','totalOplogSlotDurationMicros','waitForWriteConcernDurationMillis'])
+    return pd.DataFrame(data, columns=['hour', 'namespace', 'slow_query_count', 'durationMillis', 'has_sort_stage', 'query_targeting', 'plan_summary', 'command_shape', 'writeConflicts','skip','limit','appName','changestream','keys_examined','docs_examined','nreturned','cursorid','nBatches','numYields','totalOplogSlotDurationMicros','waitForWriteConcernDurationMillis'])
 
 #------------------------------------------------------------------------------------
 # Function for extracting from File :
@@ -353,7 +513,7 @@ def extract_slow_queries(log_file_path, output_file_path):
             output_file.write(query)
 
     print(f"Extracted slow queries have been saved to {output_file_path}")
-    return pd.DataFrame(data, columns=['hour', 'namespace', 'slow_query_count', 'total_duration', 'has_sort_stage', 'query_targeting', 'plan_summary', 'command_shape', 'writeConflicts','skip','limit','appName','changestream','keys_examined','docs_examined','nreturned','cursorid','nBatches','numYields','totalOplogSlotDurationMicros','waitForWriteConcernDurationMillis'])
+    return pd.DataFrame(data, columns=['hour', 'namespace', 'slow_query_count', 'durationMillis', 'has_sort_stage', 'query_targeting', 'plan_summary', 'command_shape', 'writeConflicts','skip','limit','appName','changestream','keys_examined','docs_examined','nreturned','cursorid','nBatches','numYields','totalOplogSlotDurationMicros','waitForWriteConcernDurationMillis','ninserted','keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros','storage_data_bytesRead','storage_data_timeReadingMicros'])
 
 def check_change_stream(document):
     changestream = False
@@ -395,6 +555,19 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
     nBatches = log_entry.get("attr", {}).get("nBatches", 0)
     numYields = log_entry.get("attr", {}).get("numYields", 0)
 
+    ninserted = log_entry.get("attr", {}).get("ninserted", 0)
+    keysInserted = log_entry.get("attr", {}).get("ninserted", 0)
+    reslen = log_entry.get("attr", {}).get("reslen", 0)
+
+    flowControl = log_entry.get("attr", {}).get("flowControl", {})
+
+    flowControl_acquireCount = flowControl.get("acquireCount", 0)
+    flowControl_timeAcquiringMicros = flowControl.get("timeAcquiringMicros", 0)
+
+    storage_data = log_entry.get("attr", {}).get("storage", {}).get("data", {})
+    storage_data_bytesRead = storage_data.get("bytesRead",0)
+    storage_data_timeReadingMicros = storage_data.get("timeReadingMicros",0)
+
     writeConflicts = log_entry.get("attr", {}).get("writeConflicts", 0)
     command = log_entry.get("attr", {}).get("command", {})
     skip = command.get("skip", 0)
@@ -406,7 +579,7 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
     timestamp = log_entry.get("t", {}).get("$date")
     if timestamp:
         hour = datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:00:00')
-        data.append([hour, namespace, 1, duration, has_sort_stage, query_targeting, plan_summary, command_shape,writeConflicts,skip,limit,appName,changestream,keys_examined,docs_examined,nreturned,cursorid,nBatches,numYields,totalOplogSlotDurationMicros,waitForWriteConcernDurationMillis])
+        data.append([hour, namespace, 1, duration, has_sort_stage, query_targeting, plan_summary, command_shape,writeConflicts,skip,limit,appName,changestream,keys_examined,docs_examined,nreturned,cursorid,nBatches,numYields,totalOplogSlotDurationMicros,waitForWriteConcernDurationMillis,ninserted,keysInserted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,storage_data_bytesRead,storage_data_timeReadingMicros])
 
 
 #----------------------------------------------------------------------------------------
@@ -478,6 +651,9 @@ def get_command_shape(command):
                 new_pipeline.append(replace_values(stage))
         return new_pipeline
     command_shape = replace_values(command)
+    command_shape.pop('lsid', None)
+    command_shape.pop('$clusterTime', None)
+
     keys = list(command_shape.keys())
     # Preserve specific keys in their original form if they are the first key
     for key in ["insert", "findAndModify", "update"]:
@@ -527,6 +703,8 @@ def plot_stats(df, value_col, title, ylabel, xlabel='Time', output_file=None, co
 # markdown utility :
 
 def save_markdown(df,fileName,comment):
+    if not GENERATE_MD:
+        return
     # Convert the DataFrame to a markdown table
     markdown_table = tabulate(df, headers='keys', tablefmt='pipe')
 
@@ -558,6 +736,14 @@ def process_row(index, row,report,columns):
 #        process_row(index,row, report,df.columns)
 
 def display_queries(report, df):
+    if df.empty :
+        return
+    df = df.copy()
+    # Ensure the column used for grouping contains hashable types
+    if 'app_name' in df.columns:
+        df['app_name'] = df['app_name'].apply(
+            lambda x: tuple(x) if isinstance(x, list) else x
+        )
     # Group the DataFrame by appName
     grouped_by_app = df.groupby('app_name')
 
@@ -567,7 +753,7 @@ def display_queries(report, df):
         report.sub3Chapter_title(f"appName: {app_name}")
 
         # Sort the grouped DataFrame by slow_query_count and average_duration in descending order
-        sorted_grouped_df = app_group.sort_values(by=['slow_query_count', 'average_duration'], ascending=[False, False])
+        sorted_grouped_df = app_group.sort_values(by=['durationMillis_total','slow_query_count'], ascending=[False, False])
 
         # Iterate over each row in the sorted grouped DataFrame
         for index, row in sorted_grouped_df.iterrows():
@@ -577,46 +763,31 @@ def display_queries(report, df):
 
 #----------------------------------------------------------------------------------------
 # report
-def groupbyCommandShape(df):
-    return df.groupby('command_shape').agg(
-        slow_query_count=('slow_query_count', 'sum'),
-        total_duration=('total_duration', 'sum'),
-        average_duration=('total_duration', 'mean'),
-        writeConflictsTotal=('writeConflicts', 'sum'),
-        writeConflictsMax=('writeConflicts', 'max'),
-        has_sort_stage=('has_sort_stage', lambda x: x.mode().iloc[0] if not x.mode().empty else False),
-        max_query_targeting=('query_targeting', 'max'),
-        sum_skip=('skip', 'sum'),
-        min_limit=('limit', 'min'),
-        max_limit=('limit', 'max'),
-        plan_summary=('plan_summary', distinct_values),
-        app_name=('appName', distinct_values),
-        keys_examined_min=('keys_examined', 'min'),
-        keys_examined_max=('keys_examined', 'max'),
-        keys_examined_avg=('keys_examined', 'mean'),
-        keys_examined_total=('keys_examined', 'sum'),
-        docs_examined_min=('docs_examined', 'min'),
-        docs_examined_max=('docs_examined', 'max'),
-        docs_examined_avg=('docs_examined', 'mean'),
-        docs_examined_total=('docs_examined', 'sum'),
-        nreturned_min=('nreturned', 'min'),
-        nreturned_max=('nreturned', 'max'),
-        nreturned_avg=('nreturned', 'mean'),
-        nreturned_total=('nreturned', 'sum'),
-        nBatches_min=('nBatches', 'min'),
-        nBatches_max=('nBatches', 'max'),
-        nBatches_avg=('nBatches', 'mean'),
-        nBatches_total=('nBatches', 'sum'),
-        numYields_min=('numYields', 'min'),
-        numYields_max=('numYields', 'max'),
-        numYields_avg=('numYields', 'mean'),
-        numYields_total=('numYields', 'sum'),
-        waitForWriteConcernDurationMillis_min=('waitForWriteConcernDurationMillis', 'min'),
-        waitForWriteConcernDurationMillis_max=('waitForWriteConcernDurationMillis', 'max'),
-        waitForWriteConcernDurationMillis_avg=('waitForWriteConcernDurationMillis', 'mean'),
-        waitForWriteConcernDurationMillis_total=('waitForWriteConcernDurationMillis', 'sum')
 
-    ).reset_index()
+def distinct_values(series):
+    # Assuming this function returns a list of unique values
+    return series.dropna().unique().tolist()
+def minMaxAvgTtl(column_name):
+    """Generate a dictionary of aggregation operations for a given column."""
+    return {
+        f'{column_name}_min': (column_name, 'min'),
+        f'{column_name}_max': (column_name, 'max'),
+        f'{column_name}_avg': (column_name, 'mean'),
+        f'{column_name}_total': (column_name, 'sum')
+    }
+def groupbyCommandShape(df):
+    # Create a dictionary to hold all aggregation operations
+    agg_operations = {
+        'slow_query_count': ('slow_query_count', 'sum'),
+        'has_sort_stage': ('has_sort_stage', lambda x: x.mode().iloc[0] if not x.mode().empty else False),
+        'plan_summary': ('plan_summary', distinct_values),
+        'app_name': ('appName', distinct_values),
+        'namespace': ('namespace', distinct_values)
+    }
+    # Add min, max, avg, total for each specified column
+    for column in ['writeConflicts','durationMillis', 'keys_examined', 'docs_examined', 'nreturned', 'query_targeting','nBatches', 'numYields','skip','limit', 'waitForWriteConcernDurationMillis','totalOplogSlotDurationMicros','ninserted','keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros','storage_data_bytesRead','storage_data_timeReadingMicros','ninserted','keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros','storage_data_bytesRead','storage_data_timeReadingMicros']:
+        agg_operations.update(minMaxAvgTtl(column))
+    return df.groupby('command_shape').agg(**agg_operations).reset_index()
 
 
 def addToReport(df,prefix,report):
@@ -628,7 +799,7 @@ def addToReport(df,prefix,report):
     # Aggregate the data to ensure unique hour-namespace combinations
     df = df.groupby(['hour', 'namespace']).agg(
         slow_query_count=('slow_query_count', 'sum'),
-        total_duration=('total_duration', 'sum'),
+        total_duration=('durationMillis', 'sum'),
         writeConflicts=('writeConflicts', 'sum'),
         has_sort_stage=('has_sort_stage', 'sum'),
         sum_skip=('skip', 'sum'),
@@ -646,7 +817,7 @@ def addToReport(df,prefix,report):
     df_plan_summary = df_withoutChangestream.groupby(['hour', 'namespace', 'plan_summary']).agg(
     slow_query_count=('slow_query_count', 'sum'),
     writeConflicts=('writeConflicts', 'sum'),
-    total_duration=('total_duration', 'sum'),
+    total_duration=('durationMillis', 'sum'),
     has_sort_stage=('has_sort_stage', 'sum'),
     sum_skip=('skip', 'sum'),
     query_targeting=('query_targeting', 'max')).reset_index()
@@ -705,7 +876,6 @@ def addToReport(df,prefix,report):
     # Group by command shape and calculate statistics
     command_shape_stats = groupbyCommandShape(df_withoutChangestream)
     # Sort by average duration
-    command_shape_stats = command_shape_stats.sort_values(by='average_duration', ascending=False)
     filtered_df = command_shape_stats[command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
     # Create DataFrame excluding filtered rows
     remaining_df = command_shape_stats[~command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
@@ -713,11 +883,11 @@ def addToReport(df,prefix,report):
     sort_stage_df = remaining_df[remaining_df['has_sort_stage'] == True]
     no_sort_stage_df = remaining_df[remaining_df['has_sort_stage'] == False]
 
-    with_conflict = no_sort_stage_df[no_sort_stage_df['writeConflictsTotal'] >0]
-    without_conflict = no_sort_stage_df[no_sort_stage_df['writeConflictsTotal'] == 0]
+    with_conflict = no_sort_stage_df[no_sort_stage_df['writeConflicts_total'] >0]
+    without_conflict = no_sort_stage_df[no_sort_stage_df['writeConflicts_total'] == 0]
 
-    has_skip = without_conflict[without_conflict['sum_skip']>0]
-    without_skip = without_conflict[without_conflict['sum_skip']==0]
+    has_skip = without_conflict[without_conflict['skip_total']>0]
+    without_skip = without_conflict[without_conflict['skip_total']==0]
 
     save_markdown(filtered_df, 'command_shape_collscan_stats.md', "collscan")
     report.add_page()
