@@ -26,7 +26,9 @@ DF_COL = ['hour', 'namespace', 'slow_query_count', 'durationMillis','planningTim
              'keys_examined', 'docs_examined', 'nreturned', 'cursorid', 'nBatches', 'numYields',
              'totalOplogSlotDurationMicros', 'waitForWriteConcernDurationMillis', 'ninserted', 'nMatched', 'nModified',
              'nUpserted', 'keysInserted', 'bytesReslen', 'flowControl_acquireCount', 'flowControl_timeAcquiringMicros',
-             'storage_data_bytesRead', 'storage_data_timeReadingMicros', 'cmdType']
+             'storage_data_bytesRead', 'storage_data_timeReadingMicros','storage_data_bytesWritten','storage_data_timeWritingMicros',
+              'storage_data_bytesTotalDiskWR','storage_data_timeWRMicros',
+             'cmdType','count_of_in','max_count_in','sum_of_counts_in','getMore']
 
 # Global variables from context values
 USING_API = False
@@ -37,7 +39,7 @@ GROUP_ID = "663bef88730dee3831c03033"
 PROCESSES_ID = ["cluster0-shard-00-00.kaffo.mongodb.net:27017","cluster0-shard-00-01.kaffo.mongodb.net:27017","cluster0-shard-00-02.kaffo.mongodb.net:27017"]
 
 # Using log (in case USING_API = False)
-LOG_FILE_PATH = 'mongod.log'  # Path to your mongod.log file
+LOG_FILE_PATH = "mongod.log" # Path to your mongod.log file
 
 # Related to output
 OUTPUT_FILE_PATH = 'slow_queries.log'  # Path to the output file where slow queries will be saved
@@ -568,7 +570,7 @@ def check_change_stream(document):
 def extractSlowQueryInfos(data, line, log_entry, slow_queries):
     slow_queries.append(line)
     # Extract relevant fields
-
+    getMore=0
     # Access the 'attr' dictionary
     attr = log_entry.get('attr', {})
     # Get the 'type' value and convert it to lowercase
@@ -615,28 +617,61 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
     flowControl_timeAcquiringMicros = flowControl.get("timeAcquiringMicros", 0)
 
     storage_data = attr.get("storage", {}).get("data", {})
+    #disk
     storage_data_bytesRead = storage_data.get("bytesRead",0)
     storage_data_timeReadingMicros = storage_data.get("timeReadingMicros",0)
+
+    storage_data_bytesWritten = storage_data.get("bytesWritten",0)
+    storage_data_timeWritingMicros = storage_data.get("timetimeWritingMicros",0)
+
+    storage_data_bytesTotalDiskWR = storage_data_bytesRead + storage_data_bytesWritten
+    storage_data_timeWRMicros = storage_data_timeReadingMicros + storage_data_timeWritingMicros
+
+    #cache
+    #storage.timeWaitingMicros.cache
+
+    #
 
     writeConflicts = attr.get("writeConflicts", 0)
     command = attr.get("command", {})
     skip = command.get("skip", 0)
     limit = command.get("limit", 0)
     changestream = check_change_stream(log_entry)
-    command_shape = get_command_shape(command)
+    command_shape, in_counts = get_command_shape(command)
+    if first_attribute_name=="getMore":
+        orig_command = attr.get("originatingCommand", {})
+        getMore=1
+        command_shape, in_counts = get_command_shape(orig_command)
+    count_of_in = len(in_counts)
+    max_count_in = max(in_counts) if in_counts else 0
+    sum_of_counts = sum(in_counts)
     if command_shape == 0:
         command_shape = "no_command"
     timestamp = log_entry.get("t", {}).get("$date")
     if timestamp:
         hour = datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:00:00')
-        data.append([hour, namespace, 1, duration,planningTimeMicros, has_sort_stage, query_targeting, plan_summary, command_shape,writeConflicts,skip,limit,appName,changestream,keys_examined,docs_examined,nreturned,cursorid,nBatches,numYields,totalOplogSlotDurationMicros,waitForWriteConcernDurationMillis,ninserted,nMatched,nModified,nUpserted,keysInserted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,storage_data_bytesRead,storage_data_timeReadingMicros,cmdType])
-
+        data.append([hour, namespace, 1, duration,planningTimeMicros, has_sort_stage, query_targeting, plan_summary,
+                     command_shape,writeConflicts,skip,limit,appName,changestream,keys_examined,docs_examined,nreturned,
+                     cursorid,nBatches,numYields,totalOplogSlotDurationMicros,waitForWriteConcernDurationMillis,ninserted,
+                     nMatched,nModified,nUpserted,keysInserted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,
+                     storage_data_bytesRead,storage_data_timeReadingMicros,storage_data_bytesWritten,storage_data_timeWritingMicros,storage_data_bytesTotalDiskWR,storage_data_timeWRMicros,
+                     cmdType,count_of_in,max_count_in,sum_of_counts,getMore])
 
 
 def get_command_shape(command):
+    in_counts = []
     def replace_values(obj):
         if isinstance(obj, dict):
-            return {k: replace_values(v) for k, v in obj.items()}
+            new_obj = {}
+            for k, v in obj.items():
+                if k == "$in" and isinstance(v, list):
+                    in_counts.append(len(v))
+                    # Use a set to collect unique types
+                    unique_types = {replace_values(i) for i in v}
+                    new_obj[k] = list(unique_types)  # Convert set back to list
+                else:
+                    new_obj[k] = replace_values(v)
+            return new_obj
         elif isinstance(obj, list):
             return [replace_values(i) for i in obj]
         elif isinstance(obj, int):
@@ -645,6 +680,8 @@ def get_command_shape(command):
             return "float"
         elif isinstance(obj, str):
             return "string"
+        elif isinstance(obj, bool):
+            return "bool"
         else:
             return "other"
     def handle_pipeline(pipeline):
@@ -679,7 +716,7 @@ def get_command_shape(command):
     # Handle the pipeline separately
     if "pipeline" in command:
         command_shape["pipeline"] = handle_pipeline(command["pipeline"])
-    return json.dumps(command_shape)
+    return json.dumps(command_shape), in_counts
 
 
 #---------------------------------------------------------------------------
@@ -738,7 +775,13 @@ def distinct_values(series):
 def process_row(index, row,report,columns):
     # Define a function to apply to each row
     report.add_page()
-    report.sub4Chapter_title(f"{convertToHumanReadable('cmdType',row['cmdType'])}({convertToHumanReadable('namespace',row['namespace'])}) : Time={convertToHumanReadable('durationMillis',row['durationMillis_total'],True)}, count={row['slow_query_count']}")
+    report.sub4Chapter_title(
+        f"{convertToHumanReadable('cmdType',row['cmdType'])}"
+        f"({convertToHumanReadable('namespace',row['namespace'])}) :"
+        f" Time={convertToHumanReadable('durationMillis',row['durationMillis_total'],True)}, count={row['slow_query_count']}"+
+        (f" totalW/R={convertToHumanReadable('bytesTotalDiskWR',row['storage_data_bytesTotalDiskWR_total'], True)}" if row['storage_data_bytesTotalDiskWR_total']>0 else ""))
+
+
     report.add_json(row['command_shape'])
     report.add_page()
     report.table(row.drop(columns=['command_shape']), [col for col in columns if col != 'command_shape'])
@@ -793,15 +836,19 @@ def groupbyCommandShape(df):
         'plan_summary': ('plan_summary', distinct_values),
         'app_name': ('appName', distinct_values),
         'namespace': ('namespace', distinct_values),
-        'cmdType':('cmdType', distinct_values)
+        'cmdType':('cmdType', distinct_values),
+        'count_of_in':('count_of_in', distinct_values),
+        'getMore':('getMore','sum')
     }
+
     # Add min, max, avg, total for each specified column
     for column in ['writeConflicts','durationMillis','planningTimeMicros', 'keys_examined', 'docs_examined', 'nreturned', 'query_targeting',
                    'nBatches', 'numYields','skip','limit', 'waitForWriteConcernDurationMillis','totalOplogSlotDurationMicros',
                    'ninserted','keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros',
                    'storage_data_bytesRead','storage_data_timeReadingMicros','ninserted', 'nMatched', 'nModified','nUpserted',
                    'keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros',
-                   'storage_data_bytesRead','storage_data_timeReadingMicros']:
+                   'storage_data_bytesRead','storage_data_timeReadingMicros','storage_data_bytesWritten','storage_data_timeWritingMicros',
+                   'storage_data_bytesTotalDiskWR','storage_data_timeWRMicros','max_count_in','sum_of_counts_in']:
         agg_operations.update(minMaxAvgTtl(column))
     return df.groupby('command_shape').agg(**agg_operations).reset_index()
 
