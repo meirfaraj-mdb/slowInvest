@@ -233,11 +233,11 @@ class PDF(FPDF):
                 if value == 0 or value == '':
                     continue
                 # Add header for the column
-                self.set_font('helvetica', 'B', 10)
-                self.cell(col_width-30, row_height, self.clean_name(col), border=1)
+                self.set_font('helvetica', 'B', 9)
+                self.cell(col_width-40, row_height, self.clean_name(col), border=1)
                 # Add the value
                 self.set_font('helvetica', '', 8)
-                self.cell(col_width+30, row_height, convertToHumanReadable(col,value), border=1)
+                self.cell(col_width+40, row_height, convertToHumanReadable(col,value), border=1)
                 self.ln(row_height)
         # Add table header and rows
         for base_name, values in aggregated_values.items():
@@ -245,12 +245,12 @@ class PDF(FPDF):
             if len(values)==0 or all(v == 0 for v in values.values()):
                 continue
             # Add header for the base name
-            self.set_font('helvetica', 'B', 10)
-            self.cell(col_width-30, row_height, self.clean_name(base_name), border=1)
+            self.set_font('helvetica', 'B', 9)
+            self.cell(col_width-40, row_height, self.clean_name(base_name), border=1)
             # Construct the human-readable value string
             value_str = ', '.join(f"{k}: {v}" for k, v in values.items() if v != 0)
             self.set_font('helvetica', '', 8)
-            self.cell(col_width+30, row_height, value_str, border=1)
+            self.cell(col_width+40, row_height, value_str, border=1)
             self.ln(row_height)
 
 
@@ -468,9 +468,9 @@ def convertTimeToHumanReadable(name, val, rounded=False):
     if seconds > 0:
         time_str += f"{seconds}s"
     if millis > 0:
-        time_str += f"{millis}ms"
+        time_str += f"{int(millis)}ms"
     if micros > 0:
-        time_str += f"{micros}micros"
+        time_str += f"{int(micros)}micros"
     return time_str or "0s"
 
 def convertToHumanReadable(name, val, rounded=False):
@@ -764,10 +764,6 @@ def save_markdown(df,fileName,comment):
 
     print("\nStatistics by Command "+comment+" Shape (sorted by average duration) have been saved to '"+fileName+"'")
 
-#----------------------------------------------------------------------------------------
-# Other utilities
-def distinct_values(series):
-    return ', '.join(sorted(set(series)))
 
 
 #----------------------------------------------------------------------------------------
@@ -818,8 +814,14 @@ def display_queries(report, df):
 # report
 
 def distinct_values(series):
-    # Assuming this function returns a list of unique values
-    return series.dropna().unique().tolist()
+    # Drop NaN values and get unique values as a list
+    unique_values = series.dropna().unique().tolist()
+    # Convert the list of unique values to a string separated by commas
+    return ', '.join(map(str, unique_values))
+    # Other utilities
+#def distinct_values(series):
+#    return ', '.join(sorted(set(series)))
+
 def minMaxAvgTtl(column_name):
     """Generate a dictionary of aggregation operations for a given column."""
     return {
@@ -938,6 +940,8 @@ def addToReport(df,prefix,report):
     # Group by command shape and calculate statistics
     command_shape_stats = groupbyCommandShape(df_withoutChangestream)
     # Sort by average duration
+    print(command_shape_stats)
+    print(command_shape_stats.info())
     filtered_df = command_shape_stats[command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
     # Create DataFrame excluding filtered rows
     remaining_df = command_shape_stats[~command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
