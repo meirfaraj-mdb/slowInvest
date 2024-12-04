@@ -22,10 +22,11 @@ from datetime import datetime
 from tabulate import tabulate
 
 DF_COL = ['hour', 'namespace', 'slow_query_count', 'durationMillis','planningTimeMicros', 'has_sort_stage', 'query_targeting',
-             'plan_summary', 'command_shape', 'writeConflicts', 'skip', 'limit', 'appName', 'changestream',
+             'plan_summary', 'command_shape', 'writeConflicts', 'skip', 'limit', 'appName', 'changestream', 'usedDisk',
+              'fromMultiPlanner','replanned','replanReason',
              'keys_examined', 'docs_examined', 'nreturned', 'cursorid', 'nBatches', 'numYields',
              'totalOplogSlotDurationMicros', 'waitForWriteConcernDurationMillis', 'ninserted', 'nMatched', 'nModified',
-             'nUpserted', 'keysInserted', 'bytesReslen', 'flowControl_acquireCount', 'flowControl_timeAcquiringMicros',
+             'nUpserted', 'ndeleted', 'keysInserted','keysDeleted', 'bytesReslen', 'flowControl_acquireCount', 'flowControl_timeAcquiringMicros',
              'storage_data_bytesRead', 'storage_data_timeReadingMicros','storage_data_bytesWritten','storage_data_timeWritingMicros',
               'storage_data_bytesTotalDiskWR','storage_data_timeWRMicros',
              'cmdType','count_of_in','max_count_in','sum_of_counts_in','getMore']
@@ -230,7 +231,7 @@ class PDF(FPDF):
         for col in columns:
             if not col.endswith(('_min', '_max', '_avg', '_total')):
                 value = row.get(col, 0)
-                if value == 0 or value == '':
+                if value == 0 or value == '' or value == '0':
                     continue
                 # Add header for the column
                 self.set_font('helvetica', 'B', 9)
@@ -606,10 +607,17 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
 
     ninserted = attr.get("ninserted", 0)
     keysInserted = attr.get("keysInserted", 0)
+    keysDeleted = attr.get("keysDeleted", 0)
     nMatched = attr.get("nMatched", 0)
     nModified = attr.get("nModified", 0)
     nUpserted = attr.get("nUpserted", 0)
+    ndeleted = attr.get("ndeleted", 0)
     reslen = attr.get("reslen", 0)
+    usedDisk = attr.get("usedDisk", 0)
+
+    fromMultiPlanner = attr.get("fromMultiPlanner", 0)
+    replanned = attr.get("replanned", 0)
+    replanReason = attr.get("replanReason", 0)
 
     flowControl = attr.get("flowControl", {})
 
@@ -622,10 +630,18 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
     storage_data_timeReadingMicros = storage_data.get("timeReadingMicros",0)
 
     storage_data_bytesWritten = storage_data.get("bytesWritten",0)
-    storage_data_timeWritingMicros = storage_data.get("timetimeWritingMicros",0)
+    storage_data_timeWritingMicros = storage_data.get("timeWritingMicros",0)
+
+    #'timeWaitingMicros.cache
+    #timeWaitingMicros.schemaLock
+    #timeWaitingMicros.handleLock
+    #execStats
+
 
     storage_data_bytesTotalDiskWR = storage_data_bytesRead + storage_data_bytesWritten
     storage_data_timeWRMicros = storage_data_timeReadingMicros + storage_data_timeWritingMicros
+
+
 
     #cache
     #storage.timeWaitingMicros.cache
@@ -651,9 +667,9 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
     if timestamp:
         hour = datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:00:00')
         data.append([hour, namespace, 1, duration,planningTimeMicros, has_sort_stage, query_targeting, plan_summary,
-                     command_shape,writeConflicts,skip,limit,appName,changestream,keys_examined,docs_examined,nreturned,
+                     command_shape,writeConflicts,skip,limit,appName,changestream,usedDisk,fromMultiPlanner,replanned,replanReason,keys_examined,docs_examined,nreturned,
                      cursorid,nBatches,numYields,totalOplogSlotDurationMicros,waitForWriteConcernDurationMillis,ninserted,
-                     nMatched,nModified,nUpserted,keysInserted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,
+                     nMatched,nModified,nUpserted,ndeleted,keysInserted,keysDeleted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,
                      storage_data_bytesRead,storage_data_timeReadingMicros,storage_data_bytesWritten,storage_data_timeWritingMicros,storage_data_bytesTotalDiskWR,storage_data_timeWRMicros,
                      cmdType,count_of_in,max_count_in,sum_of_counts,getMore])
 
@@ -835,6 +851,10 @@ def groupbyCommandShape(df):
     agg_operations = {
         'slow_query_count': ('slow_query_count', 'sum'),
         'has_sort_stage': ('has_sort_stage', lambda x: x.mode().iloc[0] if not x.mode().empty else False),
+        'usedDisk': ('usedDisk', distinct_values),
+        'fromMultiPlanner': ('fromMultiPlanner', distinct_values),
+        'replanned':('replanned', distinct_values),
+        'replanReason':('replanReason', distinct_values),
         'plan_summary': ('plan_summary', distinct_values),
         'app_name': ('appName', distinct_values),
         'namespace': ('namespace', distinct_values),
@@ -847,8 +867,8 @@ def groupbyCommandShape(df):
     for column in ['writeConflicts','durationMillis','planningTimeMicros', 'keys_examined', 'docs_examined', 'nreturned', 'query_targeting',
                    'nBatches', 'numYields','skip','limit', 'waitForWriteConcernDurationMillis','totalOplogSlotDurationMicros',
                    'ninserted','keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros',
-                   'storage_data_bytesRead','storage_data_timeReadingMicros','ninserted', 'nMatched', 'nModified','nUpserted',
-                   'keysInserted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros',
+                   'storage_data_bytesRead','storage_data_timeReadingMicros','ninserted', 'nMatched', 'nModified','nUpserted','ndeleted',
+                   'keysInserted','keysDeleted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros',
                    'storage_data_bytesRead','storage_data_timeReadingMicros','storage_data_bytesWritten','storage_data_timeWritingMicros',
                    'storage_data_bytesTotalDiskWR','storage_data_timeWRMicros','max_count_in','sum_of_counts_in']:
         agg_operations.update(minMaxAvgTtl(column))
@@ -940,8 +960,6 @@ def addToReport(df,prefix,report):
     # Group by command shape and calculate statistics
     command_shape_stats = groupbyCommandShape(df_withoutChangestream)
     # Sort by average duration
-    print(command_shape_stats)
-    print(command_shape_stats.info())
     filtered_df = command_shape_stats[command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
     # Create DataFrame excluding filtered rows
     remaining_df = command_shape_stats[~command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
