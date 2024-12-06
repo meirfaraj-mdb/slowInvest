@@ -5,7 +5,6 @@
 # pip install matplotlib
 # pip install tabulate
 # pip install PdfReader
-# pip install PdfWriter
 #pip uninstall fpdf2
 #pip install git+https://github.com/andersonhc/fpdf2.git@page-number
 
@@ -13,10 +12,10 @@ import requests
 from requests.auth import HTTPDigestAuth
 import json
 from collections import defaultdict
+import seaborn as sns
 from fpdf import FPDF, TextStyle
 from fpdf.enums import XPos,YPos
 import pandas as pd
-import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import datetime
 from tabulate import tabulate
@@ -800,9 +799,10 @@ def process_row(index, row,report,columns):
 
 
 
-def display_queries(report, df):
+def display_queries(reportTitle,report, df):
     if df.empty :
         return
+    report.sub2Chapter_title(reportTitle)
     df = df.copy()
     # Ensure the column used for grouping contains hashable types
     if 'app_name' in df.columns:
@@ -963,6 +963,8 @@ def addToReport(df,prefix,report):
     filtered_df = command_shape_stats[command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
     # Create DataFrame excluding filtered rows
     remaining_df = command_shape_stats[~command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
+    # bad query targeting
+
     # Further split remaining_df
     sort_stage_df = remaining_df[remaining_df['has_sort_stage'] == True]
     no_sort_stage_df = remaining_df[remaining_df['has_sort_stage'] == False]
@@ -973,41 +975,50 @@ def addToReport(df,prefix,report):
     has_skip = without_conflict[without_conflict['skip_total']>0]
     without_skip = without_conflict[without_conflict['skip_total']==0]
 
+    # $in
+    has_badIn = without_skip[without_skip['max_count_in_max']>200]
+    without_badIn = without_skip[without_skip['max_count_in_max']<=200]
+
+    # regex
+    # array filter
+
+    ##without_badIn
+
+
     save_markdown(filtered_df, 'command_shape_collscan_stats.md', "collscan")
     report.add_page()
     report.subChapter_title("List of slow query shape")
-    report.sub2Chapter_title("List of Collscan query shape")
-    display_queries(report,filtered_df)
+    display_queries("List of Collscan query shape",report,filtered_df)
 
     save_markdown(sort_stage_df, 'command_shape_remaining_hasSort_stats.md', "remainingHasSort")
     report.add_page()
-    report.sub2Chapter_title("List of remain hasSortStage query shape")
-    display_queries(report,sort_stage_df)
+    display_queries("List of remain hasSortStage query shape",report,sort_stage_df)
 
     save_markdown(with_conflict, 'withConflict_stats.md', "withConflict")
     report.add_page()
-    report.sub2Chapter_title("List of other query withConflict")
-    display_queries(report,with_conflict)
+    display_queries("List of other query withConflict",report,with_conflict)
 
 ###################SKIP
     save_markdown(has_skip, 'has_skip_stats.md', "has_skip")
     report.add_page()
-    report.sub2Chapter_title("List of other query with skip")
-    display_queries(report,has_skip)
+    display_queries("List of other query with skip",report,has_skip)
+
+###################bad $in
+    save_markdown(has_skip, 'has_badIn.md', "has_badIn")
+    report.add_page()
+    display_queries("List of query with bad $in",report,has_badIn)
 
 ###################$Regex
 ###################disk
-    save_markdown(without_skip, 'command_shape_others_stats.md', "others")
+    save_markdown(without_badIn, 'command_shape_others_stats.md', "others")
     report.add_page()
-    report.sub2Chapter_title("List of other query shape")
-    display_queries(report,without_skip)
+    display_queries("List of other query shape",report,without_badIn)
 
-
+################## change stream
     command_shape_cs_stats = groupbyCommandShape(df_changestream)
     save_markdown(command_shape_cs_stats, 'command_shape_cs_stats.md', "changestream")
     report.add_page()
-    report.sub2Chapter_title("List of changestream")
-    display_queries(report,command_shape_cs_stats)
+    display_queries("List of changestream",report,command_shape_cs_stats)
 
 #----------------------------------------------------------------------------------------
 #  Main :
