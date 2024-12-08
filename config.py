@@ -3,7 +3,7 @@ import json
 
 # Load configuration from a JSON file
 def load_config(file_path):
-    print(f"loading config from config/{file_path}.json")
+    print(f"loading config from {file_path}")
     with open(file_path, 'r') as config_file:
         config = json.load(config_file)
     return config
