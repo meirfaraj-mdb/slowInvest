@@ -310,13 +310,19 @@ if __name__ == "__main__":
     config = Config(first_option)
     report = Report(config)
     report.add_page()
-    if config.USING_API :
-       atlasApi = AtlasApi(config)
-       for process in config.PROCESSES_ID:
-           addToReport(atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID,process,config.OUTPUT_FILE_PATH),process,report)
-    else :
-       addToReport(extract_slow_queries(config.LOG_FILE_PATH, config.OUTPUT_FILE_PATH),config.LOG_FILE_PATH,report)
 
-    report.write("slow_report")
+    if config.RETRIEVAL_MODE == "Atlas":
+        atlasApi = AtlasApi(config)
+        for process in config.PROCESSES_ID:
+            addToReport(atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID,process,config.OUTPUT_FILE_PATH),process,report)
+    elif config.RETRIEVAL_MODE == "files":
+        for file in config.LOGS_FILENAME:
+            addToReport(extract_slow_queries(f"{config.INPUT_PATH}/{file}", config.OUTPUT_FILE_PATH),
+                        f"{config.INPUT_PATH}/{file}",report)
+    elif config.RETRIEVAL_MODE == "OpsManager":
+        print(f"Retrieval Mode: {config.RETRIEVAL_MODE} not yet implemented use files mode instead.")
+    else:
+        raise ValueError(f"Unsupported RETRIEVAL_MODE: {config.RETRIEVAL_MODE}")
+    report.write(f"{config.REPORT_FILE_PATH}/slow_report")
 
 
