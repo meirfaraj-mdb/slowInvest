@@ -40,7 +40,7 @@ class PDF(FPDF):
                 font_size_pt=16,
                 color=128,
                 underline=True,
-                t_margin=10,
+                t_margin=0,
                 l_margin=2,
                 b_margin=0,
             ),
@@ -51,9 +51,9 @@ class PDF(FPDF):
                 font_size_pt=14,
                 color=128,
                 underline=True,
-                t_margin=10,
+                t_margin=0,
                 l_margin=10,
-                b_margin=5,
+                b_margin=0,
             ),
             # Level 2 subtitles:
             TextStyle(
@@ -62,9 +62,9 @@ class PDF(FPDF):
                 font_size_pt=12,
                 color=128,
                 underline=True,
-                t_margin=10,
+                t_margin=0,
                 l_margin=4,
-                b_margin=10,
+                b_margin=0,
             ),
             # Level 3 subtitles:
             TextStyle(
@@ -73,9 +73,9 @@ class PDF(FPDF):
                 font_size_pt=8,
                 color=128,
                 underline=True,
-                t_margin=10,
+                t_margin=0,
                 l_margin=6,
-                b_margin=10,
+                b_margin=0,
             ),
             # Level 4 subtitles:
             TextStyle(
@@ -84,9 +84,9 @@ class PDF(FPDF):
                 font_size_pt=4,
                 color=128,
                 underline=True,
-                t_margin=10,
+                t_margin=0,
                 l_margin=8,
-                b_margin=10,
+                b_margin=0,
             ),
         )
 
@@ -114,21 +114,22 @@ class PDF(FPDF):
 
     def chapter_title(self, title):
         self.start_section(title)
-        self.ln(10)
+        self.ln(1)
 
     def subChapter_title(self, subchapter):
         self.start_section(subchapter,level=1)
-        self.ln(10)
+        self.ln(1)
 
     def sub2Chapter_title(self, subchapter):
         self.start_section(subchapter,level=2)
-        self.ln(10)
+        self.ln(1)
     def sub3Chapter_title(self, subchapter):
         self.start_section(subchapter,level=3)
-        self.ln(10)
+        self.ln(1)
+
     def sub4Chapter_title(self, subchapter):
         self.start_section(subchapter,level=4)
-        self.ln(10)
+        self.ln(1)
 
 
     def clean_name(self,name):
@@ -155,6 +156,113 @@ class PDF(FPDF):
             name = name[:-6]  # Remove the last 6 characters
         # Strip any leading or trailing whitespace
         return name.strip()
+
+    def display_line(self,col_width,row_height,dispName,value):
+        # Add header for the base name
+        if (value is None or value == False or value == 0 or value == '' or value == '0' or
+                (isinstance(value, (list, tuple, dict)) and len(value) == 0)):
+            return
+        self.set_font('helvetica', 'B', 7)
+        self.cell(col_width-55, row_height, dispName , border=1)
+        self.set_font('helvetica', '', 7)
+        self.cell(col_width+55, row_height, convertToHumanReadable(dispName,value), border=1)
+        self.ln(row_height)
+
+    def display_cluster_table(self,cluster):
+        self.add_page()
+        self.chapter_title(f"Cluster {cluster.get('name')} report")
+        self.subChapter_title(f"General")
+        self.set_font('helvetica', 'B', 8)
+        col_width = self.epw / 2
+        row_height = self.font_size * 1.5
+        displayCluster = [
+            ["Cluster Name",'name'],
+            ["Cluster Type",'clusterType'],
+            ["Create Date",'createDate'],
+            ["Feature Compatibility Version",'featureCompatibilityVersion'],
+            ["MongoDB Major Version", 'mongoDBMajorVersion'],
+            ["MongoDB Version",'mongoDBVersion'],
+            ["Version Release System",'versionReleaseSystem'],
+            ["Group/Project Id",'groupId'],
+            ["Cluster Id",'id'],
+            ["Backup Enabled",'backupEnabled'],
+            ["PIT Enabled",'pitEnabled'],
+            ["Paused",'paused'],
+            ["Termination Protection Enabled",'terminationProtectionEnabled'],
+            ["BI Connector",'biConnector'],
+            ["Tags",'tags'],
+            ["Labels",'labels'],
+            ["Config Server Management Mode",'configServerManagementMode'],
+            ["Config Server Type",'configServerType'],
+            ["Global Cluster Self Managed Sharding",'globalClusterSelfManagedSharding'],
+            ["Disk Warming Mode",'diskWarmingMode'],
+            ['Encryption At Rest Provider','encryptionAtRestProvider'],
+            ['Root Cert Type','rootCertType'],
+            ['Redact Client Log Data','redactClientLogData'],
+            ['Instance Composition','instance_composition']
+        ]
+        for line in displayCluster:
+           self.display_line(col_width,row_height,line[0],cluster.get(line[1],None))
+        self.subChapter_title(f"Advanced configuration")
+        advancedConfiguration = cluster.get('advancedConfiguration', {})
+        for k,v in advancedConfiguration.items():
+            self.display_line(col_width,row_height,k,v)
+
+
+        replicationSpecs = cluster.get('replicationSpecs',None)
+        if replicationSpecs is not None:
+           self.subChapter_title(f"Replication/cluster Spec")
+           idNum=0
+           for spec in replicationSpecs:
+               ext= "(Shard) " if cluster.get('clusterType') in ["SHARDED", "GEOSHARDED"] else ""
+               self.sub2Chapter_title(f"Replication Spec {ext}No {idNum} Id: {spec.get('id','')} Zone:{spec.get('zoneName','')}({spec.get('zoneId','')})")
+               regionConfigs=spec.get('regionConfigs',[])
+               regionNum=0
+               for regionConfig in regionConfigs:
+                   self.sub3Chapter_title(f"Region No {regionNum} {regionConfig.get('providerName','')} : Name: {regionConfig.get('regionName','')} Priority:{regionConfig.get('priority','')}")
+                   nodeCount = regionConfig.get('electableSpecs',{}).get('nodeCount',0)
+                   if nodeCount > 0:
+                       self.display_line(col_width,row_height,"Electable node specs",
+                                         regionConfig.get('electableSpecs',{}))
+                       self.display_line(col_width,row_height,"Electable Autoscaling",
+                                         regionConfig.get('autoScaling',{}))
+                   nodeCount = regionConfig.get('readOnlySpecs',{}).get('nodeCount',0)
+                   if nodeCount > 0:
+                       self.display_line(col_width,row_height,"read Only node specs",
+                                         regionConfig.get('readOnlySpecs',{}))
+                   nodeCount = regionConfig.get('analyticsSpecs',{}).get('nodeCount',0)
+                   if nodeCount > 0:
+                       self.display_line(col_width,row_height,"Analytics node specs",
+                                         regionConfig.get('analyticsSpecs',{}))
+                       self.display_line(col_width,row_height,"Analytics Autoscaling",
+                                         regionConfig.get('analyticsAutoScaling',{}))
+                   regionNum = regionNum + 1
+               processes = cluster.get('processes', None)
+               if processes is not None:
+                   shard_process=processes.get(idNum,{})
+                   primary = shard_process.get("primary",{})
+                   self.sub3Chapter_title(f"Primary Process")
+                   for k,v in primary.items():
+                        self.display_line(col_width,row_height,k,v)
+                   self.sub3Chapter_title(f"Others Process")
+                   others = shard_process.get("others",{})
+                   for proc in others:
+                       for k,v in proc.items():
+                           self.display_line(col_width,row_height,k,v)
+                       self.ln(4)
+               idNum=idNum+1
+        connectionStrings = cluster.get('connectionStrings',None)
+        if connectionStrings is not None:
+            self.subChapter_title(f"Connection Strings")
+            displayCluster = [
+                ["AWS Private Link SRV",'awsPrivateLinkSrv'],
+                ["Private Endpoint",'privateEndpoint'],
+                ["Standard",'standard'],
+                ["Standard SRV",'standardSrv']
+            ]
+            for line in displayCluster:
+                self.display_line(col_width,row_height,line[0],connectionStrings.get(line[1],None))
+
 
     def table(self, row, columns):
         # Calculate column width based on the number of columns

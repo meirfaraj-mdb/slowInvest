@@ -81,6 +81,10 @@ def convertToHumanReadable(name, val, rounded=False):
         else:  # If it contains multiple elements
             return ', '.join(map(str, val))
 
+    # Check if val is a boolean
+    if isinstance(val, (bool)):
+        val = "True" if val else "False"
+
     # Check if val is a number and round it
     if isinstance(val, (int, float)):
         val = round(val)

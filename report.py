@@ -50,6 +50,9 @@ class Report():
     def add_json(self,json):
         if self.config.GENERATE_PDF_REPORT :
             self.lpdf.add_json(json)
+    def display_cluster_table(self,cluster):
+        if self.config.GENERATE_PDF_REPORT :
+            self.lpdf.display_cluster_table(cluster)
 
     def table(self, df, column):
         if self.config.GENERATE_PDF_REPORT :

@@ -19,12 +19,13 @@ from utils import *
 from slowQuery import *
 from config import Config
 import sys
+import os
 
 
 
 #---------------------------------------------------------------------------
 # Plot Util :
-def plot_stats(df, value_col, title, ylabel, xlabel='Time', output_file=None, columns = ['namespace'],report=None):
+def plot_stats(config,df, value_col, title, ylabel, xlabel='Time', output_file=None, columns = ['namespace'],report=None):
     if df.empty:
         if report:
             report.chapter_body(f"No {title} to present as graph")
@@ -44,11 +45,17 @@ def plot_stats(df, value_col, title, ylabel, xlabel='Time', output_file=None, co
     plt.tight_layout()
 
     if output_file:
-        plt.savefig(output_file, bbox_inches='tight')
-        plt.savefig(f"{output_file}.svg", format="svg")
-        print(f"Graph saved to {output_file}")
+        if config.GENERATE_PNG:
+            plt.savefig(output_file, bbox_inches='tight')
+            print(f"Graph saved to {output_file}")
+        file_path=f"{output_file}.svg"
+        plt.savefig(file_path, format="svg")
+        print(f"Graph saved to {file_path}")
         if report:
-           report.add_image(f"{output_file}.svg")
+           report.add_image(file_path)
+           if config.DELETE_IMAGE_AFTER_USED and os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"{file_path} has been deleted.")
     else:
         plt.show()
 
@@ -199,42 +206,42 @@ def addToReport(df,prefix,report):
     report.add_page()
     report.sub2Chapter_title("Number of Slow Queries per Hour per Namespace")
     file_name = f"{prefix}_slow_queries_per_hour.png"
-    plot_stats(df, 'slow_query_count', 'Number of Slow Queries per Hour per Namespace', 'Number of Slow Queries',
+    plot_stats(config,df, 'slow_query_count', 'Number of Slow Queries per Hour per Namespace', 'Number of Slow Queries',
                output_file=file_name,report=report)
 
     # Plot total duration of slow queries per hour per namespace
     report.add_page()
     report.sub2Chapter_title("Total Duration of Slow Queries per Hour per Namespace")
     file_name = f"{prefix}_total_duration_per_hour.png"
-    plot_stats(df, 'total_duration', 'Total Duration of Slow Queries per Hour per Namespace', 'Total Duration (ms)',
+    plot_stats(config,df, 'total_duration', 'Total Duration of Slow Queries per Hour per Namespace', 'Total Duration (ms)',
                output_file=file_name,report=report)
 
 #    tmp = df[df['plan_summary'].str.contains('COLLSCAN')]
     report.add_page()
     report.sub2Chapter_title("COLLSCAN Count per Hour per Namespace")
     file_name = f"{prefix}_COLLSCAN_per_hour.png"
-    plot_stats(df_plan_summary[df_plan_summary['plan_summary'].str.contains('COLLSCAN')], 'slow_query_count', 'COLLSCAN Count per Hour per Namespace', 'COLLSCAN Count',
+    plot_stats(config,df_plan_summary[df_plan_summary['plan_summary'].str.contains('COLLSCAN')], 'slow_query_count', 'COLLSCAN Count per Hour per Namespace', 'COLLSCAN Count',
            output_file=file_name,columns = ['namespace','plan_summary'],report=report)
 
     # Plot hasSortStage count per hour per namespace
     report.add_page()
     report.sub2Chapter_title("Has Sort Stage Count per Hour per Namespace")
     file_name = f"{prefix}_has_sort_stage_per_hour.png"
-    plot_stats(df, 'has_sort_stage', 'Has Sort Stage Count per Hour per Namespace', 'Has Sort Stage Count',
+    plot_stats(config,df, 'has_sort_stage', 'Has Sort Stage Count per Hour per Namespace', 'Has Sort Stage Count',
                output_file=file_name,report=report)
 
     # Plot writeConflicts count per hour per namespace
     report.add_page()
     report.sub2Chapter_title("write conflicts Count per Hour per Namespace")
     file_name = f"{prefix}_writeConflicts_per_hour.png"
-    plot_stats(df, 'writeConflicts', 'write conflicts Count per Hour per Namespace', 'write conflicts Count',
+    plot_stats(config,df, 'writeConflicts', 'write conflicts Count per Hour per Namespace', 'write conflicts Count',
                output_file=file_name,report=report)
 
     # Plot query targeting per hour per namespace
     report.add_page()
     report.sub2Chapter_title("Query Targeting per Hour per Namespace")
     file_name = f"{prefix}_query_targeting_per_hour.png"
-    plot_stats(df, 'query_targeting', 'Query Targeting per Hour per Namespace', 'Query Targeting',
+    plot_stats(config,df, 'query_targeting', 'Query Targeting per Hour per Namespace', 'Query Targeting',
                output_file=file_name,report=report)
 
 
@@ -242,7 +249,7 @@ def addToReport(df,prefix,report):
     report.add_page()
     report.sub2Chapter_title("Skip per Hour per Namespace")
     file_name = f"{prefix}_skip_per_hour.png"
-    plot_stats(df, 'sum_skip', 'total skip per Hour per Namespace', 'total skip',
+    plot_stats(config,df, 'sum_skip', 'total skip per Hour per Namespace', 'total skip',
                output_file=file_name,report=report)
 
 
@@ -302,6 +309,45 @@ def addToReport(df,prefix,report):
     save_markdown(command_shape_cs_stats, 'command_shape_cs_stats.md', "changestream")
     display_queries("List of changestream",report,command_shape_cs_stats)
 
+def display_cluster(config,report,cluster):
+    report.display_cluster_table(cluster)
+
+def atlas_retrieval_mode(config,report):
+    atlasApi = AtlasApi(config)
+    if config.ATLAS_RETRIEVAL_SCOPE == "project":
+        compositions = atlasApi.get_clusters_composition(config.GROUP_ID)
+        for cluster in compositions :
+            display_cluster(config,report,cluster)
+            processesShard=cluster.get("processes",{})
+            for shard_num,processes in processesShard.items():
+                if shard_num == "config":
+                    addToReport(
+                        atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID,processes.get("id",""),config.OUTPUT_FILE_PATH),
+                        f"{shard_num}_{processes.get("id","")}_{processes.get("typeName","")}",
+                        report)
+                    continue
+                primary=processes.get("primary",{})
+                addToReport(
+                    atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID,primary.get("id",""),config.OUTPUT_FILE_PATH),
+                    f"{shard_num}_{primary.get("id","")}_{primary.get("typeName","")}",
+                    report)
+                others=processes.get("others",{})
+                for proc in others:
+                    addToReport(
+                      atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID,proc.get("id",""),config.OUTPUT_FILE_PATH),
+                      f"{shard_num}_{proc.get("id","")}_{proc.get("typeName","")}",
+                      report)
+
+    elif config.ATLAS_RETRIEVAL_SCOPE == "clusters":
+        for cluster_name in config.CLUSTERS_NAME:
+            compositions = atlasApi.get_clusters_composition(config.GROUP_ID,cluster_name)
+            for cluster in compositions :
+               display_cluster(config,report,cluster)
+
+    else: #processId
+        for process in config.PROCESSES_ID:
+            addToReport(atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID,process,config.OUTPUT_FILE_PATH),process,report)
+
 #----------------------------------------------------------------------------------------
 #  Main :
 if __name__ == "__main__":
@@ -312,9 +358,7 @@ if __name__ == "__main__":
     report.add_page()
 
     if config.RETRIEVAL_MODE == "Atlas":
-        atlasApi = AtlasApi(config)
-        for process in config.PROCESSES_ID:
-            addToReport(atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID,process,config.OUTPUT_FILE_PATH),process,report)
+        atlas_retrieval_mode(config,report)
     elif config.RETRIEVAL_MODE == "files":
         for file in config.LOGS_FILENAME:
             addToReport(extract_slow_queries(f"{config.INPUT_PATH}/{file}", config.OUTPUT_FILE_PATH),
