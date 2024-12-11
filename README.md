@@ -12,4 +12,19 @@ This project is an experimental collection of Python scripts that simplify the r
 -----------------------------
 ## Usage
 
+python finalSlowInvest [configName]
+where configName is the config name for the config json to load without json by default config.
+
+Command: python finalSlowInvest [configName]
+
+### Command: `python finalSlowInvest [configName]`
+
+#### Description
+
+Executes the `finalSlowInvest` script using the specified configuration.
+
+- **`[configName]`**: This argument refers to the name of the configuration JSON file to be loaded, excluding the `.json` extension.
+
+- **Default Behavior**: If no `[configName]` is provided, the script will use a default configuration named `config`.
+
 -----------------------------

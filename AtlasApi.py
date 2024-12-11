@@ -4,6 +4,20 @@ import json
 from slowQuery import *
 import re
 
+def convert_list_to_dict(databases):
+    """
+    Converts a list of database names into a dictionary with each database name
+    as a key and -1 as its corresponding value.
+
+    Parameters:
+        databases (list): A list of database names.
+
+    Returns:
+        dict: A dictionary with database names as keys and -1 as values.
+    """
+    return {database: -1 for database in databases}
+
+
 class AtlasApi():
     def __init__(self,config):
         self.config=config
@@ -53,7 +67,12 @@ class AtlasApi():
           except json.JSONDecodeError:
             # Skip lines that are not valid JSON
             continue
-        print(f"Extracted slow queries have been saved to {output_file_path}")
+        sl_output_file_path = f"{output_file_path}/slow_queries_{groupId}_{processId}.log"
+        with open(sl_output_file_path, 'w', encoding='utf-8') as output_file:
+           for query in slow_queries:
+               output_file.write(query)
+
+        print(f"Extracted slow queries have been saved to {sl_output_file_path}")
         return pd.DataFrame(data, columns=DF_COL)
 
     def listAllProject(self):
@@ -96,6 +115,37 @@ class AtlasApi():
 
 
 
+    def get_database_for_process(self, group_id, process_id):
+        all_results = []
+        page_num = 1
+        total_count = None
+        while True:
+            resp = self.atlas_request(
+                "get_database_for_process",
+             f"/groups/{group_id}/processes/{process_id}/databases",
+                "2023-01-01",
+                {
+                    'itemsPerPage': '500',
+                    'pageNum': str(page_num),
+                }
+            )
+
+            # Assuming 'results' is the list of returned documents and 'totalCount' is the total number of documents
+            all_results.extend(resp.get('results', []))
+            # If total_count is not set, initialize it
+            if total_count is None:
+                total_count = resp.get('totalCount', len(all_results))
+
+            # Break if we've collected all results
+            if len(all_results) >= total_count:
+                break
+
+            # Increment page number to get the next set of results
+            page_num += 1
+        resp = {}
+        resp['results']=all_results
+        resp['totalCount']=total_count
+        return resp
 
     def calculate_instance_composition(self, cluster):
         instance_composition = {}
@@ -133,7 +183,7 @@ class AtlasApi():
         if cluster_name is None:
             clusters = self.listAllProjectClusters(group_id)
         else:
-            clusters = [ self.getOneCluster(group_id,cluster_name)]
+            clusters = {'results':[ self.getOneCluster(group_id,cluster_name)]}
 
         cluster_name_to_inf = {}
         processes_by_cluster = {}
@@ -154,6 +204,8 @@ class AtlasApi():
             if match_config:
                 cluster_name = match_config.group(1)
                 shard_number = int(match_config.group(3))
+                if cluster_name_to_inf.get(cluster_name.lower(),None) is None:
+                    continue
                 configServerType = cluster_name_to_inf.get(cluster_name.lower(),{}).get('configServerType',None)
                 if cluster_name not in processes_by_cluster:
                     processes_by_cluster[cluster_name] = {}
@@ -161,7 +213,7 @@ class AtlasApi():
                 if configServerType == 'EMBEDDED':
                     replicationSpecs = cluster_name_to_inf.get(cluster_name.lower(),{}).get('replicationSpecs',[])
                     shard_number = len(replicationSpecs)-1
-                    print(f"{shard_number}")
+                    #print(f"{shard_number}")
                     if cluster_name not in processes_by_cluster:
                         processes_by_cluster[cluster_name] = {}
                     if shard_number not in processes_by_cluster[cluster_name]:
@@ -178,6 +230,8 @@ class AtlasApi():
                 match = re.match(pattern, user_alias)
                 if match:
                     cluster_name = match.group(1)
+                    if cluster_name_to_inf.get(cluster_name.lower(),None) is None:
+                        continue
                     shard_number = int(match.group(3))
                     if cluster_name not in processes_by_cluster:
                         processes_by_cluster[cluster_name] = {}
@@ -192,44 +246,36 @@ class AtlasApi():
                     cluster_name_to_inf[cluster_name.lower()]["processes"]=processes_by_cluster[cluster_name]
         return result
 
+    def get_database_composition_for_process(self,cluster,process):
+        #         for cluster_name, shards in processes_by_cluster.items():
+        #             to_write = cluster_name_to_inf[cluster_name]
+        #             to_write["storage_size"] = 0
+        #             to_write["databases"] = {}
+        #
+        #             for shard, process_info in shards.items():
+        #                 print(f"shardpid: {process_info['pid']}")
+        #
+        group_id=cluster.get('groupId')
+        process_id=process.get('id')
+        resp = self.get_database_for_process(group_id,process_id)
+        process["databases_size"] = resp.get("results",[]) #convert_list_to_dict(resp.get("results",[]))
 
 
-
-
-
-
-
-
-
-
-
-    #         for cluster_name, shards in processes_by_cluster.items():
-    #             to_write = cluster_name_to_inf[cluster_name]
-    #             to_write["storage_size"] = 0
-    #             to_write["databases"] = {}
-    #
-    #             for shard, process_info in shards.items():
-    #                 print(f"shardpid: {process_info['pid']}")
-    #
-    #                 process_base_url = f"{project_base_url}/processes/{process_info['pid']}"
-    #                 list_databases_base_url = f"{process_base_url}/databases"
-    #
-    #                 databases = await atlas_request("GetProcessDatabases", list_databases_base_url, "2023-01-01", {
-    #                     'itemsPerPage': '500',
-    #                     'pageNum': '1',
-    #                 })
-    #                 print(f"databases.totalCount: {databases['totalCount']}")
-    #
-    #                 for database in databases['results']:
-    #                     measurement_database_base_url = f"{list_databases_base_url}/{database['databaseName']}/measurements"
-    #                     print(f"measurementDatabaseBaseUrl: {measurement_database_base_url}")
+    #def get_database_size_for_process(self,cluster,process,databaseName):
+    #    measurement_database_base_url = f"{list_databases_base_url}/{database['databaseName']}/measurements"
+    #    print(f"measurementDatabaseBaseUrl: {measurement_database_base_url}")
     #
     #                     database_measure = await atlas_request("GetProcessDatabasesMeasure", measurement_database_base_url, "2023-01-01", {
     #                         'm': "DATABASE_STORAGE_SIZE",
     #                         'granularity': "PT10M",
     #                         'period': "PT1H"
     #                     })
-    #                     print(f"databaseMeasure: {database_measure}")
+
+    def get_database_composition_sizing_for_process(self,cluster,process):
+        databases_size = process.get("databases_size",{})
+       # for database,size in databases_size.items():
+       #     database
+       #     print(f"databaseMeasure: {database_measure}")
     #
     #                     measurement = database_measure['measurements'][0]
     #                     measurement['dataPoints'] = [dp for dp in measurement['dataPoints'] if dp['value'] is not None]

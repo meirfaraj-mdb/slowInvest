@@ -11,6 +11,7 @@ DF_COL = ['hour', 'namespace', 'slow_query_count', 'durationMillis','planningTim
           'nUpserted', 'ndeleted', 'keysInserted','keysDeleted', 'bytesReslen', 'flowControl_acquireCount', 'flowControl_timeAcquiringMicros',
           'storage_data_bytesRead', 'storage_data_timeReadingMicros','storage_data_bytesWritten','storage_data_timeWritingMicros',
           'storage_data_bytesTotalDiskWR','storage_data_timeWRMicros',
+          'storage_data_timeWaitingMicros_cache','storage_data_timeWaitingMicros_schemaLock','storage_data_timeWaitingMicros_handleLock',
           'cmdType','count_of_in','max_count_in','sum_of_counts_in','getMore']
 
 
@@ -122,9 +123,12 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
     storage_data_bytesWritten = storage_data.get("bytesWritten",0)
     storage_data_timeWritingMicros = storage_data.get("timeWritingMicros",0)
 
-    #'timeWaitingMicros.cache
-    #timeWaitingMicros.schemaLock
-    #timeWaitingMicros.handleLock
+    timeWaitingMicros = storage_data.get("timeWaitingMicros", {})
+    # cache
+    storage_data_timeWaitingMicros_cache = timeWaitingMicros.get("cache",0)
+    storage_data_timeWaitingMicros_schemaLock = timeWaitingMicros.get("schemaLock",0)
+    storage_data_timeWaitingMicros_handleLock = timeWaitingMicros.get("handleLock",0)
+
     #execStats
 
 
@@ -143,6 +147,99 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
     skip = command.get("skip", 0)
     limit = command.get("limit", 0)
     changestream = check_change_stream(log_entry)
+    #command.get("readConcern",None)
+    #readConcern:
+    #{
+    #level: string
+    #provenance: string
+    #}
+    #
+
+    #clientOperationKey:
+# {
+# $uuid: string
+# }
+# shardVersion:
+# {
+#     e:
+#         {
+# $oid: string
+# }
+# t:
+# {
+# $timestamp:
+# {
+#     t: int
+#     i: int
+# }
+# }
+# v:
+# {
+# $timestamp:
+# {
+#     t: int
+#     i: int
+# }
+# }
+# }
+# databaseVersion:
+# {
+#     uuid:
+#         {
+# $uuid: string
+# }
+# timestamp:
+# {
+# $timestamp:
+# {
+#     t: int
+#     i: int
+# }
+# }
+# lastMod: int
+# }
+# $configTime:
+# {
+# $timestamp:
+# {
+#     t: int
+#     i: int
+# }
+# }
+# $topologyTime:
+# {
+# $timestamp:
+# {
+#     t: int
+#     i: int
+# }
+# }
+#     $client:
+# {
+#     driver:
+#         {
+#             name: string
+#             version: string
+#         }
+#     os:
+#         {
+#             type: string
+#             name: string
+#             architecture: string
+#             version: string
+#         }
+#     platform: string
+#     application:
+#         {
+#             name: string
+#         }
+#     mongos:
+#         {
+#             host: string
+#             client: string
+#             version: string
+#         }
+# }
     command_shape, in_counts = get_command_shape(command)
     if first_attribute_name=="getMore":
         orig_command = attr.get("originatingCommand", {})
@@ -161,6 +258,7 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
                      cursorid,nBatches,numYields,totalOplogSlotDurationMicros,waitForWriteConcernDurationMillis,ninserted,
                      nMatched,nModified,nUpserted,ndeleted,keysInserted,keysDeleted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,
                      storage_data_bytesRead,storage_data_timeReadingMicros,storage_data_bytesWritten,storage_data_timeWritingMicros,storage_data_bytesTotalDiskWR,storage_data_timeWRMicros,
+                     storage_data_timeWaitingMicros_cache,storage_data_timeWaitingMicros_schemaLock,storage_data_timeWaitingMicros_handleLock,
                      cmdType,count_of_in,max_count_in,sum_of_counts,getMore])
 
 
@@ -214,7 +312,16 @@ def get_command_shape(command):
     command_shape = replace_values(command)
     command_shape.pop('lsid', None)
     command_shape.pop('$clusterTime', None)
-
+    command_shape.pop("readConcern",None)
+    command_shape.pop("clientOperationKey",None)
+    command_shape.pop("shardVersion",None)
+    command_shape.pop("$timestamp",None)
+    command_shape.pop("databaseVersion",None)
+    command_shape.pop("$topologyTime",None)
+    command_shape.pop("$configTime",None)
+    command_shape.pop("$audit",None)
+    command_shape.pop("$client",None)
+    command_shape.pop("mayBypassWriteBlocking",None)
     keys = list(command_shape.keys())
     # Preserve specific keys in their original form if they are the first key
     for key in ["insert", "findAndModify", "update"]:
