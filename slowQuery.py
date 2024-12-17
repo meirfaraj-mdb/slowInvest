@@ -3,7 +3,7 @@ import pandas as pd
 import json
 
 
-DF_COL = ['hour', 'namespace', 'slow_query_count', 'durationMillis','planningTimeMicros', 'has_sort_stage', 'query_targeting',
+DF_COL = ['hour', 'db', 'namespace', 'slow_query_count', 'durationMillis','planningTimeMicros', 'has_sort_stage', 'query_targeting',
           'plan_summary', 'command_shape', 'writeConflicts', 'skip', 'limit', 'appName', 'changestream', 'usedDisk',
           'fromMultiPlanner','replanned','replanReason',
           'keys_examined', 'docs_examined', 'nreturned', 'cursorid', 'nBatches', 'numYields',
@@ -240,11 +240,11 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
 #             version: string
 #         }
 # }
-    command_shape, in_counts = get_command_shape(command)
+    command_shape, in_counts,db = get_command_shape(command,namespace)
     if first_attribute_name=="getMore":
         orig_command = attr.get("originatingCommand", {})
         getMore=1
-        command_shape, in_counts = get_command_shape(orig_command)
+        command_shape, in_counts,db = get_command_shape(orig_command,namespace)
     count_of_in = len(in_counts)
     max_count_in = max(in_counts) if in_counts else 0
     sum_of_counts = sum(in_counts)
@@ -253,7 +253,7 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
     timestamp = log_entry.get("t", {}).get("$date")
     if timestamp:
         hour = datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:00:00')
-        data.append([hour, namespace, 1, duration,planningTimeMicros, has_sort_stage, query_targeting, plan_summary,
+        data.append([hour, db, namespace, 1, duration,planningTimeMicros, has_sort_stage, query_targeting, plan_summary,
                      command_shape,writeConflicts,skip,limit,appName,changestream,usedDisk,fromMultiPlanner,replanned,replanReason,keys_examined,docs_examined,nreturned,
                      cursorid,nBatches,numYields,totalOplogSlotDurationMicros,waitForWriteConcernDurationMillis,ninserted,
                      nMatched,nModified,nUpserted,ndeleted,keysInserted,keysDeleted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,
@@ -262,8 +262,9 @@ def extractSlowQueryInfos(data, line, log_entry, slow_queries):
                      cmdType,count_of_in,max_count_in,sum_of_counts,getMore])
 
 
-def get_command_shape(command):
+def get_command_shape(command,namespace):
     in_counts = []
+    db=command.get("$db",namespace.split('.', 1))
     def replace_valuesAsStr(obj):
         res=replace_values(obj)
         if isinstance(res, str):
@@ -324,7 +325,7 @@ def get_command_shape(command):
     command_shape.pop("mayBypassWriteBlocking",None)
     keys = list(command_shape.keys())
     # Preserve specific keys in their original form if they are the first key
-    for key in ["insert", "findAndModify", "update"]:
+    for key in ["insert", "findAndModify", "update","delete"]:
         if key in command_shape and keys.index(key) == 0:
             command_shape[key] = command[key]
     # Preserve other specific keys in their original form
@@ -334,4 +335,4 @@ def get_command_shape(command):
     # Handle the pipeline separately
     if "pipeline" in command:
         command_shape["pipeline"] = handle_pipeline(command["pipeline"])
-    return json.dumps(command_shape), in_counts
+    return json.dumps(command_shape), in_counts, db

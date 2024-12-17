@@ -74,6 +74,8 @@ def plot_stats(config, df, value_col, title, ylabel, xlabel='Time', output_file=
 
 
 
+
+
 #-----------------------------------------------------------------------------------------
 # markdown utility :
 
@@ -194,83 +196,17 @@ def addToReport(df,prefix,report,config):
     report.chapter_body(f"Instance : {prefix}")
     df = df[~df['namespace'].str.startswith(('admin', 'local', 'config'))]
     df_orig = df
-    # Aggregate the data to ensure unique hour-namespace combinations
-    df = df.groupby(['hour', 'namespace']).agg(
-        slow_query_count=('slow_query_count', 'sum'),
-        total_duration=('durationMillis', 'sum'),
-        writeConflicts=('writeConflicts', 'sum'),
-        has_sort_stage=('has_sort_stage', 'sum'),
-        sum_skip=('skip', 'sum'),
-        query_targeting=('query_targeting', 'max')).reset_index()
-    all_namespaces = df['namespace'].unique()
-    report.chapter_body(f"Namespace List : {all_namespaces}")
-    if df.empty :
+    if df_orig.empty :
         report.chapter_body("No slow query!")
         report.add_page()
         return
-
-    report.subChapter_title("Graphics")
     df_changestream = df_orig[df_orig['changestream'] == True]
     df_withoutChangestream = df_orig[df_orig['changestream'] == False]
-    df_plan_summary = df_withoutChangestream.groupby(['hour', 'namespace', 'plan_summary']).agg(
-    slow_query_count=('slow_query_count', 'sum'),
-    writeConflicts=('writeConflicts', 'sum'),
-    total_duration=('durationMillis', 'sum'),
-    has_sort_stage=('has_sort_stage', 'sum'),
-    sum_skip=('skip', 'sum'),
-    query_targeting=('query_targeting', 'max')).reset_index()
 
-    if config.INSERT_GRAPH_SUMMARY_TO_REPORT:
-        # Plot number of slow queries per hour per namespace
-        report.add_page()
-        report.sub2Chapter_title("Number of Slow Queries per Hour per Namespace")
-        file_name = f"{prefix}_slow_queries_per_hour.png"
-        plot_stats(config,df, 'slow_query_count', 'Number of Slow Queries per Hour per Namespace', 'Number of Slow Queries',
-               output_file=file_name,report=report)
-
-        # Plot total duration of slow queries per hour per namespace
-        report.add_page()
-        report.sub2Chapter_title("Total Duration of Slow Queries per Hour per Namespace")
-        file_name = f"{prefix}_total_duration_per_hour.png"
-        plot_stats(config,df, 'total_duration', 'Total Duration of Slow Queries per Hour per Namespace', 'Total Duration (ms)',
-               output_file=file_name,report=report)
-
-        #    tmp = df[df['plan_summary'].str.contains('COLLSCAN')]
-        report.add_page()
-        report.sub2Chapter_title("COLLSCAN Count per Hour per Namespace")
-        file_name = f"{prefix}_COLLSCAN_per_hour.png"
-        plot_stats(config,df_plan_summary[df_plan_summary['plan_summary'].str.contains('COLLSCAN')], 'slow_query_count', 'COLLSCAN Count per Hour per Namespace', 'COLLSCAN Count',
-           output_file=file_name,columns = ['namespace','plan_summary'],report=report)
-
-        # Plot hasSortStage count per hour per namespace
-        report.add_page()
-        report.sub2Chapter_title("Has Sort Stage Count per Hour per Namespace")
-        file_name = f"{prefix}_has_sort_stage_per_hour.png"
-        plot_stats(config,df, 'has_sort_stage', 'Has Sort Stage Count per Hour per Namespace', 'Has Sort Stage Count',
-               output_file=file_name,report=report)
-
-        # Plot writeConflicts count per hour per namespace
-        report.add_page()
-        report.sub2Chapter_title("write conflicts Count per Hour per Namespace")
-        file_name = f"{prefix}_writeConflicts_per_hour.png"
-        plot_stats(config,df, 'writeConflicts', 'write conflicts Count per Hour per Namespace', 'write conflicts Count',
-               output_file=file_name,report=report)
-
-        # Plot query targeting per hour per namespace
-        report.add_page()
-        report.sub2Chapter_title("Query Targeting per Hour per Namespace")
-        file_name = f"{prefix}_query_targeting_per_hour.png"
-        plot_stats(config,df, 'query_targeting', 'Query Targeting per Hour per Namespace', 'Query Targeting',
-               output_file=file_name,report=report)
-
-
-        # Plot query targeting per hour per namespace
-        report.add_page()
-        report.sub2Chapter_title("Skip per Hour per Namespace")
-        file_name = f"{prefix}_skip_per_hour.png"
-        plot_stats(config,df, 'sum_skip', 'total skip per Hour per Namespace', 'total skip',
-               output_file=file_name,report=report)
-
+    # Aggregate the data to ensure unique hour-namespace combinations
+    report.subChapter_title("Graphics")
+    createGraphByDb(config, df, df_withoutChangestream, prefix, report)
+    createGraphByNamespace(config, df, df_withoutChangestream, prefix, report)
 
     # Group by command shape and calculate statistics
     command_shape_stats = groupbyCommandShape(df_withoutChangestream)
@@ -331,6 +267,90 @@ def addToReport(df,prefix,report,config):
     command_shape_cs_stats = groupbyCommandShape(df_changestream)
     save_markdown(command_shape_cs_stats, 'command_shape_cs_stats.md', "changestream")
     display_queries("List of changestream",report,command_shape_cs_stats)
+
+
+
+def createGraphByNamespace(config, df, df_withoutChangestream, prefix, report):
+    groupByCondition = 'namespace'
+    createGraphBy(config, df, df_withoutChangestream, groupByCondition, prefix, report)
+
+def createGraphByDb(config, df, df_withoutChangestream, prefix, report):
+    groupByCondition = 'db'
+    createGraphBy(config, df, df_withoutChangestream, groupByCondition, prefix, report)
+
+
+def createGraphBy(config, df, df_withoutChangestream, groupByCondition, prefix, report):
+    if config.INSERT_GRAPH_SUMMARY_TO_REPORT:
+      df = df.groupby(['hour', groupByCondition]).agg(
+         slow_query_count=('slow_query_count', 'sum'),
+         total_duration=('durationMillis', 'sum'),
+         writeConflicts=('writeConflicts', 'sum'),
+         has_sort_stage=('has_sort_stage', 'sum'),
+         sum_skip=('skip', 'sum'),
+         query_targeting=('query_targeting', 'max')).reset_index()
+      all_group = df[groupByCondition].unique()
+      report.chapter_body(f"{groupByCondition} List : {all_group}")
+      df_plan_summary = df_withoutChangestream.groupby(['hour', groupByCondition, 'plan_summary']).agg(
+        slow_query_count=('slow_query_count', 'sum'),
+        writeConflicts=('writeConflicts', 'sum'),
+        total_duration=('durationMillis', 'sum'),
+        has_sort_stage=('has_sort_stage', 'sum'),
+        sum_skip=('skip', 'sum'),
+        query_targeting=('query_targeting', 'max')).reset_index()
+
+      # Plot number of slow queries per hour per groupByCondition
+      report.add_page()
+      report.sub2Chapter_title(f"Number of Slow Queries per Hour per {groupByCondition}")
+      file_name = f"{prefix}_slow_queries_per_hour_and_{groupByCondition}.png"
+      plot_stats(config, df, 'slow_query_count', f"Number of Slow Queries per Hour per {groupByCondition}",
+                   'Number of Slow Queries',
+                   output_file=file_name, report=report,columns=[groupByCondition])
+
+      # Plot total duration of slow queries per hour per groupByCondition
+      report.add_page()
+      report.sub2Chapter_title(f"Total Duration of Slow Queries per Hour per {groupByCondition}")
+      file_name = f"{prefix}_total_duration_per_hour_and_{groupByCondition}.png"
+      plot_stats(config, df, 'total_duration', f"Total Duration of Slow Queries per Hour per {groupByCondition}",
+                   'Total Duration (ms)',
+                   output_file=file_name, report=report,columns=[groupByCondition])
+
+      #    tmp = df[df['plan_summary'].str.contains('COLLSCAN')]
+      report.sub2Chapter_title(f"COLLSCAN Count per Hour per {groupByCondition}")
+      report.add_page()
+      file_name = f"{prefix}_COLLSCAN_per_hour_and_{groupByCondition}.png"
+      plot_stats(config, df_plan_summary[df_plan_summary['plan_summary'].str.contains('COLLSCAN')],
+                   'slow_query_count', f"COLLSCAN Count per Hour per {groupByCondition}", 'COLLSCAN Count',
+                   output_file=file_name, columns=[groupByCondition, 'plan_summary'], report=report)
+
+      # Plot hasSortStage count per hour per groupByCondition
+      report.add_page()
+      report.sub2Chapter_title(f"Has Sort Stage Count per Hour per {groupByCondition}")
+      file_name = f"{prefix}_has_sort_stage_per_hour.png"
+      plot_stats(config, df, "has_sort_stage", f"Has Sort Stage Count per Hour per {groupByCondition}",
+                   "Has Sort Stage Count", output_file=file_name, report=report,columns=[groupByCondition])
+
+      # Plot writeConflicts count per hour per groupByCondition
+      report.add_page()
+      report.sub2Chapter_title(f"write conflicts Count per Hour per {groupByCondition}")
+      file_name = f"{prefix}_writeConflicts_per_hour_and_{groupByCondition}.png"
+      plot_stats(config, df, 'writeConflicts', f"write conflicts Count per Hour per {groupByCondition}",
+                   'write conflicts Count',
+                   output_file=file_name, report=report,columns=[groupByCondition])
+
+      # Plot query targeting per hour per groupByCondition
+      report.add_page()
+      report.sub2Chapter_title(f"Query Targeting per Hour per {groupByCondition}")
+      file_name = f"{prefix}_query_targeting_per_hour_and_{groupByCondition}.png"
+      plot_stats(config, df, 'query_targeting', f"Query Targeting per Hour per {groupByCondition}", 'Query Targeting',
+                   output_file=file_name, report=report,columns=[groupByCondition])
+
+      # Plot query targeting per hour per groupByCondition
+      report.add_page()
+      report.sub2Chapter_title(f"Skip per Hour per {groupByCondition}")
+      file_name = f"{prefix}_skip_per_hour_and_{groupByCondition}.png"
+      plot_stats(config, df, 'sum_skip', f"total skip per Hour per {groupByCondition}", 'total skip',
+                   output_file=file_name, report=report,columns=[groupByCondition])
+
 
 def display_cluster(config,report,cluster):
     report.display_cluster_table(cluster)
