@@ -183,9 +183,19 @@ class PDF(FPDF):
         cluster["backupCompliance_configured"]="True" if len(cluster["backupCompliance"])>0 else "False"
 
         concurrent.futures.as_completed(cluster["futur"]["backup"])
-        cluster["backup"]=cluster["futur"]["backup"].result()
-        del cluster["futur"]["backupCompliance"]
+        cluster["backup_snapshot"]=cluster["futur"]["backup"].result().get("results",[])
+        cluster["backup_snapshot_count"]=len(cluster["backup_snapshot"])
+        del cluster["futur"]["backup"]
 
+        concurrent.futures.as_completed(cluster["futur"]["onlineArchiveForOneCluster"])
+        cluster["onlineArchiveForOneCluster"]=cluster["futur"]["onlineArchiveForOneCluster"].result().get("results",[])
+        cluster["onlineArchiveForOneCluster_count"]=len(cluster["onlineArchiveForOneCluster"])
+        del cluster["futur"]["onlineArchiveForOneCluster"]
+
+        concurrent.futures.as_completed(cluster["futur"]["performanceAdvisorSuggestedIndexes"])
+        cluster["performanceAdvisorSuggestedIndexes"]=cluster["futur"]["performanceAdvisorSuggestedIndexes"].result()
+        del cluster["futur"]["performanceAdvisorSuggestedIndexes"]
+        cluster["performanceAdvisorSuggestedIndexes_count"] = len(cluster["performanceAdvisorSuggestedIndexes"].get('suggestedIndexes',[]))
         displayCluster = [
             ["Cluster Name",'name'],
             ["Cluster Type",'clusterType'],
@@ -216,6 +226,9 @@ class PDF(FPDF):
             ['Regions','regions'],
             ['Regions count','regions_count'],
             ["Backup Compliance configured","backupCompliance_configured"],
+            ["Backup snapshot count","backup_snapshot_count"],
+            ["Online Archive Count","onlineArchiveForOneCluster_count"],
+            ["Suggested Index Count","performanceAdvisorSuggestedIndexes_count"],
         ]
 
         for line in displayCluster:

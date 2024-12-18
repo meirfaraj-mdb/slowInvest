@@ -174,6 +174,62 @@ class AtlasApi():
                                 {})
         return resp
 
+# [
+#     {
+#         "collectionName": "string",
+#         "database": "string",
+#         "indexID": "32b6e34b3d91647abb20e7b8",
+#         "latestDefinition": {
+#             "numPartitions": 1
+#         },
+#         "latestDefinitionVersion": {
+#             "createdAt": "2019-08-24T14:15:22Z",
+#             "version": 0
+#         },
+#         "name": "string",
+#         "queryable": true,
+#         "status": "DELETING",
+#         "statusDetail": [
+#             {
+#                 "hostname": "string",
+#                 "mainIndex": {
+#                     "definition": {
+#                         "numPartitions": 1
+#                     },
+#                     "definitionVersion": {
+#                         "createdAt": "2019-08-24T14:15:22Z",
+#                         "version": 0
+#                     },
+#                     "message": "string",
+#                     "queryable": true,
+#                     "status": "DELETING"
+#                 },
+#                 "queryable": true,
+#                 "stagedIndex": {
+#                     "definition": {
+#                         "numPartitions": 1
+#                     },
+#                     "definitionVersion": {
+#                         "createdAt": "2019-08-24T14:15:22Z",
+#                         "version": 0
+#                     },
+#                     "message": "string",
+#                     "queryable": true,
+#                     "status": "DELETING"
+#                 },
+#                 "status": "DELETING"
+#             }
+#         ],
+#         "type": "search"
+#     }
+# ]
+    def getAllAtlasSearchIndexForOneCluster(self,groupId,clusterName):
+        resp=self.atlas_request("getAllAtlasSearchIndexForOneCluster",
+                            f"/groups/{groupId}/clusters/{clusterName}/search/indexes",
+                            "2024-05-30",
+                            {})
+        return resp
+
 
 # {
 #     "shapes": [
@@ -478,7 +534,7 @@ class AtlasApi():
             cluster["futur"]["performanceAdvisorSuggestedIndexes"] = pool.submit(self.getPerformanceAdvisorSuggestedIndexes,group_id,cluster_name)
             cluster["futur"]["onlineArchiveForOneCluster"] = pool.submit(self.getAllOnlineArchiveForOneCluster,group_id,cluster_name)
             cluster["futur"]["backupCompliance"] = pool.submit(self.getBackupCompliance,group_id)
-            cluster["futur"]["backup"] = pool.submit(self.listAllBackupSnapshotForCluster,self,group_id,cluster_name,cluster["clusterType"])
+            cluster["futur"]["backup"] = pool.submit(self.listAllBackupSnapshotForCluster,group_id,cluster_name,cluster["clusterType"])
             cluster["futur"]["advancedConfiguration"] = pool.submit(self.getAdvancedConfigurationForOneCluster,group_id, cluster_name)
 
             replicationSpecs = cluster.get('replicationSpecs',None)
