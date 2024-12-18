@@ -2,6 +2,7 @@ from fpdf import FPDF, TextStyle
 from fpdf.enums import XPos,YPos
 import json
 from utils import *
+import concurrent
 
 #------------------------------------------------------------------------------------
 # Pdf related
@@ -175,6 +176,16 @@ class PDF(FPDF):
         self.set_font('helvetica', 'B', 8)
         col_width = self.epw / 2
         row_height = self.font_size * 1.5
+
+        concurrent.futures.as_completed(cluster["futur"]["backupCompliance"])
+        cluster["backupCompliance"]=cluster["futur"]["backupCompliance"].result()
+        del cluster["futur"]["backupCompliance"]
+        cluster["backupCompliance_configured"]="True" if len(cluster["backupCompliance"])>0 else "False"
+
+        concurrent.futures.as_completed(cluster["futur"]["backup"])
+        cluster["backup"]=cluster["futur"]["backup"].result()
+        del cluster["futur"]["backupCompliance"]
+
         displayCluster = [
             ["Cluster Name",'name'],
             ["Cluster Type",'clusterType'],
@@ -199,17 +210,34 @@ class PDF(FPDF):
             ['Encryption At Rest Provider','encryptionAtRestProvider'],
             ['Root Cert Type','rootCertType'],
             ['Redact Client Log Data','redactClientLogData'],
-            ['Instance Composition','instance_composition']
+            ['Instance Composition','instance_composition'],
+            ['Providers','providers'],
+            ['Providers count','providers_count'],
+            ['Regions','regions'],
+            ['Regions count','regions_count'],
+            ["Backup Compliance configured","backupCompliance_configured"],
         ]
+
         for line in displayCluster:
            self.display_line(col_width,row_height,line[0],cluster.get(line[1],None))
         self.subChapter_title(f"Advanced configuration")
+
+        concurrent.futures.as_completed(cluster["futur"]["advancedConfiguration"])
+        cluster["advancedConfiguration"]=cluster["futur"]["advancedConfiguration"].result()
+        del cluster["futur"]["advancedConfiguration"]
         advancedConfiguration = cluster.get('advancedConfiguration', {})
+
         for k,v in advancedConfiguration.items():
             self.display_line(col_width,row_height,k,v)
 
+        if cluster["backupCompliance_configured"]:
+            self.subChapter_title(f"Advanced configuration")
+            for k,v in cluster["backupCompliance"].items():
+                self.display_line(col_width,row_height,k,v)
+
 
         replicationSpecs = cluster.get('replicationSpecs',None)
+
         if replicationSpecs is not None:
            self.subChapter_title(f"Replication/cluster Spec")
            idNum=0

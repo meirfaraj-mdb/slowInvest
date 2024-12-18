@@ -5,10 +5,15 @@
 # pip install matplotlib
 # pip install tabulate
 # pip install PdfReader
-#pip uninstall fpdf2
+# pip uninstall fpdf2
+# pip install pyarrow
+# pip install pyyaml
+
 #pip install git+https://github.com/andersonhc/fpdf2.git@page-number
 
 from collections import defaultdict
+from turtledemo.penrose import start
+
 import seaborn as sns
 import matplotlib.pyplot as plt
 from tabulate import tabulate
@@ -20,7 +25,7 @@ from slowQuery import *
 from config import Config
 import sys
 import os
-
+import concurrent.futures
 
 
 #---------------------------------------------------------------------------
@@ -113,7 +118,7 @@ def process_row(index, row,report,columns):
 
 
 def display_queries(reportTitle,report, df):
-    if df.empty :
+    if df is None or df.empty :
         return
     report.add_page()
     report.sub2Chapter_title(reportTitle)
@@ -143,131 +148,71 @@ def display_queries(reportTitle,report, df):
 #----------------------------------------------------------------------------------------
 # report
 
-def distinct_values(series):
-    # Drop NaN values and get unique values as a list
-    unique_values = series.dropna().unique().tolist()
-    # Convert the list of unique values to a string separated by commas
-    return ', '.join(map(str, unique_values))
-    # Other utilities
-#def distinct_values(series):
-#    return ', '.join(sorted(set(series)))
-
-def minMaxAvgTtl(column_name):
-    """Generate a dictionary of aggregation operations for a given column."""
-    return {
-        f'{column_name}_min': (column_name, 'min'),
-        f'{column_name}_max': (column_name, 'max'),
-        f'{column_name}_avg': (column_name, 'mean'),
-        f'{column_name}_total': (column_name, 'sum')
-    }
-def groupbyCommandShape(df):
-    # Create a dictionary to hold all aggregation operations
-    agg_operations = {
-        'slow_query_count': ('slow_query_count', 'sum'),
-        'has_sort_stage': ('has_sort_stage', lambda x: x.mode().iloc[0] if not x.mode().empty else False),
-        'usedDisk': ('usedDisk', distinct_values),
-        'fromMultiPlanner': ('fromMultiPlanner', distinct_values),
-        'replanned':('replanned', distinct_values),
-        'replanReason':('replanReason', distinct_values),
-        'plan_summary': ('plan_summary', distinct_values),
-        'app_name': ('appName', distinct_values),
-        'namespace': ('namespace', distinct_values),
-        'cmdType':('cmdType', distinct_values),
-        'count_of_in':('count_of_in', distinct_values),
-        'getMore':('getMore','sum')
-    }
-
-    # Add min, max, avg, total for each specified column
-
-    for column in ['writeConflicts','durationMillis','planningTimeMicros', 'keys_examined', 'docs_examined', 'nreturned', 'query_targeting',
-                   'nBatches', 'numYields','skip','limit', 'waitForWriteConcernDurationMillis','totalOplogSlotDurationMicros',
-                   'ninserted', 'nMatched', 'nModified','nUpserted','ndeleted',
-                   'keysInserted','keysDeleted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros',
-                   'storage_data_bytesRead','storage_data_timeReadingMicros','storage_data_bytesWritten','storage_data_timeWritingMicros',
-                   'storage_data_bytesTotalDiskWR','storage_data_timeWRMicros',
-                   'storage_data_timeWaitingMicros_cache','storage_data_timeWaitingMicros_schemaLock','storage_data_timeWaitingMicros_handleLock',
-                   'max_count_in','sum_of_counts_in']:
-        agg_operations.update(minMaxAvgTtl(column))
-    return df.groupby('command_shape').agg(**agg_operations).reset_index()
-
-def addToReport(df,prefix,report,config):
+def addToReport(result,prefix,report,config):
     report.chapter_title(f"Slow Query Report Summary : {prefix}")
     report.subChapter_title("General")
     report.chapter_body(f"Instance : {prefix}")
-    df = df[~df['namespace'].str.startswith(('admin', 'local', 'config'))]
-    df_orig = df
-    if df_orig.empty :
+    if result.get("countOfSlow",0) == 0:
         report.chapter_body("No slow query!")
         report.add_page()
         return
-    df_changestream = df_orig[df_orig['changestream'] == True]
-    df_withoutChangestream = df_orig[df_orig['changestream'] == False]
 
     # Aggregate the data to ensure unique hour-namespace combinations
     report.subChapter_title("Graphics")
-    createGraphByDb(config, df, df_withoutChangestream, prefix, report)
-    createGraphByNamespace(config, df, df_withoutChangestream, prefix, report)
+#    createGraphByDb(config, result, prefix, report)
+#    createGraphByNamespace(config, result, prefix, report)
 
     # Group by command shape and calculate statistics
-    command_shape_stats = groupbyCommandShape(df_withoutChangestream)
+    command_shape_stats = result["groupByCommandShape"].get("global",{})
+    if len(command_shape_stats)>0 and command_shape_stats.shape[0]>0:
+        addCommandShapAnalysis(command_shape_stats, config, report)
+
+    ################## change stream
+    command_shape_cs_stats = result["groupByCommandShapeChangeStream"].get("global",{})
+    if (command_shape_cs_stats is not None) and len(command_shape_cs_stats)>0 and command_shape_cs_stats.shape[0]>0:
+        save_markdown(command_shape_cs_stats, 'command_shape_cs_stats.md', "changestream")
+        display_queries("List of changestream",report,command_shape_cs_stats)
+
+
+def addCommandShapAnalysis(command_shape_stats, config, report):
     if config.MINIMUM_DURATION_FOR_QUERYSHAPE > 0:
-        command_shape_stats = command_shape_stats[command_shape_stats['durationMillis_total'] >= (1000*config.MINIMUM_DURATION_FOR_QUERYSHAPE)]
-
-
+        command_shape_stats = command_shape_stats[
+            command_shape_stats['durationMillis_total'] >= (1000 * config.MINIMUM_DURATION_FOR_QUERYSHAPE)]
     # Sort by average duration
     filtered_df = command_shape_stats[command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
     # Create DataFrame excluding filtered rows
     remaining_df = command_shape_stats[~command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
     # bad query targeting
-
     # Further split remaining_df
     sort_stage_df = remaining_df[remaining_df['has_sort_stage'] == True]
     no_sort_stage_df = remaining_df[remaining_df['has_sort_stage'] == False]
-
-    with_conflict = no_sort_stage_df[no_sort_stage_df['writeConflicts_total'] >0]
+    with_conflict = no_sort_stage_df[no_sort_stage_df['writeConflicts_total'] > 0]
     without_conflict = no_sort_stage_df[no_sort_stage_df['writeConflicts_total'] == 0]
-
-    has_skip = without_conflict[without_conflict['skip_total']>0]
-    without_skip = without_conflict[without_conflict['skip_total']==0]
-
+    has_skip = without_conflict[without_conflict['skip_total'] > 0]
+    without_skip = without_conflict[without_conflict['skip_total'] == 0]
     # $in
-    has_badIn = without_skip[without_skip['max_count_in_max']>200]
-    without_badIn = without_skip[without_skip['max_count_in_max']<=200]
-
+    has_badIn = without_skip[without_skip['max_count_in_max'] > 200]
+    without_badIn = without_skip[without_skip['max_count_in_max'] <= 200]
     # regex
     # array filter
-
     ##without_badIn
-
-
     report.subChapter_title("List of slow query shape")
     save_markdown(filtered_df, 'command_shape_collscan_stats.md', "collscan")
-    display_queries("List of Collscan query shape",report,filtered_df)
-
+    display_queries("List of Collscan query shape", report, filtered_df)
     save_markdown(sort_stage_df, 'command_shape_remaining_hasSort_stats.md', "remainingHasSort")
-    display_queries("List of remain hasSortStage query shape",report,sort_stage_df)
-
+    display_queries("List of remain hasSortStage query shape", report, sort_stage_df)
     save_markdown(with_conflict, 'withConflict_stats.md', "withConflict")
-    display_queries("List of other query withConflict",report,with_conflict)
-
-###################SKIP
+    display_queries("List of other query withConflict", report, with_conflict)
+    ###################SKIP
     save_markdown(has_skip, 'has_skip_stats.md', "has_skip")
-    display_queries("List of other query with skip",report,has_skip)
-
-###################bad $in
+    display_queries("List of other query with skip", report, has_skip)
+    ###################bad $in
     save_markdown(has_skip, 'has_badIn.md', "has_badIn")
-    display_queries("List of query with bad $in",report,has_badIn)
-
-###################$Regex
-###################disk
+    display_queries("List of query with bad $in", report, has_badIn)
+    ###################$Regex
+    ###################disk
     save_markdown(without_badIn, 'command_shape_others_stats.md', "others")
-    display_queries("List of other query shape",report,without_badIn)
-
-################## change stream
-    command_shape_cs_stats = groupbyCommandShape(df_changestream)
-    save_markdown(command_shape_cs_stats, 'command_shape_cs_stats.md', "changestream")
-    display_queries("List of changestream",report,command_shape_cs_stats)
-
+    display_queries("List of other query shape", report, without_badIn)
 
 
 def createGraphByNamespace(config, df, df_withoutChangestream, prefix, report):
@@ -358,20 +303,30 @@ def display_cluster(config,report,cluster):
 def atlas_retrieval_mode(config,report):
     atlasApi = AtlasApi(config)
     if config.ATLAS_RETRIEVAL_SCOPE == "project":
+        print(f"Get project {config.GROUP_ID} composition....")
+        start_time_comp = time.time()
         compositions = atlasApi.get_clusters_composition(config.GROUP_ID)
+        end_time_comp = time.time()
+        print(f"Received project {config.GROUP_ID} composition in {convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)}")
         for cluster in compositions :
             generate_cluster_report(atlasApi, cluster, config, report)
 
 
     elif config.ATLAS_RETRIEVAL_SCOPE == "clusters":
         for cluster_name in config.CLUSTERS_NAME:
+            print(f"Get cluster {cluster_name} composition....")
+            start_time_comp = time.time()
             compositions = atlasApi.get_clusters_composition(config.GROUP_ID,cluster_name)
+            end_time_comp = time.time()
+            print(f"Received cluster {cluster_name} composition in {convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)}")
             for cluster in compositions :
                 generate_cluster_report(atlasApi, cluster, config, report)
 
     else: #processId
         for process in config.PROCESSES_ID:
-            addToReport(atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID,process,config.OUTPUT_FILE_PATH),
+            path=f"{config.OUTPUT_FILE_PATH}/process/{process}/"
+            addToReport(atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID,process,path,
+                                                                       config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK),
                         process,
                         report,
                         config)
@@ -381,22 +336,44 @@ def generate_cluster_report(atlasApi, cluster, config, report):
     if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
         report = Report(config)
         report.add_page()
-    display_cluster(config, report, cluster)
     processesShard = cluster.get("processes", {})
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=min(len(processesShard)*4+3,20))
+    results={}
+    for shard_num, processes in processesShard.items():
+        if shard_num == "config":
+            path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{processes.get("typeName")}/{processes.get("hostname")}/"
+            results[processes.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, processes.get("id", ""),path,config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
+            continue
+        primary = processes.get("primary", {})
+        #atlasApi.get_database_composition_for_process(cluster, primary)
+        path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{primary.get("typeName")}/{primary.get("hostname")}/"
+        results[primary.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, primary.get("id", ""),
+                                                           path,
+                                                           config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
+        #atlasApi.get_database_composition_sizing_for_process(cluster, primary)
+
+        others = processes.get("others", {})
+        for proc in others:
+            path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{proc.get("typeName")}/{proc.get("hostname")}/"
+            results[proc.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, proc.get("id", ""),
+                                                               path,
+                                                               config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
+
+    pool.shutdown(wait=True)
+    display_cluster(config, report, cluster)
+
     for shard_num, processes in processesShard.items():
         if shard_num == "config":
             addToReport(
-                atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID, processes.get("id", ""),
-                                                               config.OUTPUT_FILE_PATH),
+                results[processes.get("id","")].result(),
                 f"{config.OUTPUT_FILE_PATH}/{shard_num}_{processes.get("id", "")}_{processes.get("typeName", "")}",
                 report,
                 config)
             continue
         primary = processes.get("primary", {})
-        atlasApi.get_database_composition_for_process(cluster, primary)
+        #atlasApi.get_database_composition_for_process(cluster, primary)
         addToReport(
-            atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID, primary.get("id", ""),
-                                                           config.OUTPUT_FILE_PATH),
+            results[primary.get("id", "")].result(),
             f"{config.OUTPUT_FILE_PATH}/{shard_num}_{primary.get("id", "")}_{primary.get("typeName", "")}",
             report,
             config)
@@ -405,8 +382,7 @@ def generate_cluster_report(atlasApi, cluster, config, report):
         others = processes.get("others", {})
         for proc in others:
             addToReport(
-                atlasApi.retrieveLast24HSlowQueriesFromCluster(config.GROUP_ID, proc.get("id", ""),
-                                                               config.OUTPUT_FILE_PATH),
+                results[proc.get("id", "")].result(),
                 f"{config.OUTPUT_FILE_PATH}/{shard_num}_{proc.get("id", "")}_{proc.get("typeName", "")}",
                 report,
                 config)
@@ -419,7 +395,8 @@ def file_retrieval_mode(config,report):
         if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
             report = Report(config)
             report.add_page()
-        addToReport(extract_slow_queries(f"{config.INPUT_PATH}/{file}", f"{config.OUTPUT_FILE_PATH}/slow_queries_{file}"),
+        addToReport(extract_slow_queries(f"{config.INPUT_PATH}/{file}", f"{config.OUTPUT_FILE_PATH}/slow_queries_{file}",
+                                         config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK),
                     f"{config.OUTPUT_FILE_PATH}/{file}",
                     report,
                     config)
@@ -429,6 +406,7 @@ def file_retrieval_mode(config,report):
 #----------------------------------------------------------------------------------------
 #  Main :
 if __name__ == "__main__":
+    start_time_all=time.time()
     first_option = sys.argv[1] if len(sys.argv) > 1 else None
     # Use the first_option in your Config class or elsewhere
     config = Config(first_option)
@@ -446,5 +424,5 @@ if __name__ == "__main__":
 
     if not config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
         report.write(f"{config.REPORT_FILE_PATH}/slow_report")
-
-
+    end_time_all=time.time()
+    print(f"work end in {convertToHumanReadable("Millis",(end_time_all-start_time_all)*1000,True)}")

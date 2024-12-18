@@ -36,13 +36,14 @@ class Config():
         self.CLUSTERS_NAME  = self.config.get('CLUSTERS_NAME',[])
         # processId
         self.PROCESSES_ID = self.config.get('PROCESSES_ID',[])
-
-
         self.INPUT_PATH = self.config.get('INPUT_PATH' , 'inputs')
         createDirs(self.INPUT_PATH)
         self.REPORT_FILE_PATH = self.config.get('REPORT_FILE_PATH','reports')
         createDirs(self.REPORT_FILE_PATH)
         self.OUTPUT_FILE_PATH = self.config.get('OUTPUT_FILE_PATH','outputs')
+        #none parquet json
+        self.SAVE_BY_CHUNK = self.config.get('SAVE_BY_CHUNK', 'json')
+        self.MAX_CHUNK_SIZE = self.config.get('MAX_CHUNK_SIZE',50000)
         createDirs(self.OUTPUT_FILE_PATH)
         self.LOGS_FILENAME = self.config.get('LOGS_FILENAME',['mongodb.log']) # was LOG_FILE_PATH
         self.GENERATE_ONE_PDF_PER_CLUSTER_FILE = self.config.get('GENERATE_ONE_PDF_PER_CLUSTER_FILE',True)
