@@ -67,6 +67,7 @@ class AtlasApi():
         sl_output_file_path = f"{output_file_path}/slow_queries_{groupId}_{processId}.log"
         it=0
         lastHours = None
+        dtime = None
         dt = None
         with open(sl_output_file_path, 'w', encoding='utf-8') as output_file:
             while last_count <0 or last_count>=20000 :
@@ -77,38 +78,39 @@ class AtlasApi():
                 resp=self.atlas_request('SlowQueries', path, '2023-01-01', arg)
                 last_count=len(resp['slowQueries'])
                 for entry in resp['slowQueries']:
-                   try:
-                      line = entry['line']
-                      log_entry = json.loads(line)
-                      if log_entry.get("msg") == "Slow query":
-                        timestamp = log_entry.get("t", {}).get("$date")
-                        if timestamp:
-                            dt=datetime.fromisoformat(timestamp)
-                            hour = dt.strftime('%Y-%m-%d_%H')
-                            if lastHours is None :
-                                lastHours = hour
-                            if not (lastHours == hour) or len(data) >= chunk_size:
-                                dumpAggregation=not (lastHours == hour)
-                                lastHours = hour
-                                it+=1
-                                append_to_parquet(data, parquet_file_path_base,lastHours, it,save_by_chunk,dumpAggregation,result)
-                                if result["countOfSlow"]%200000==0:
-                                    end_time = time.time()
-                                    elapsed_time_ms = (end_time - start_time) * 1000
-                                    print(f"loaded {result["countOfSlow"]} slow queries in {elapsed_time_ms} ms")
-                                data = []  # Clear list to free memory
-                            if extractSlowQueryInfos(data, log_entry):
-                                output_file.write(line)
-                            else:
-                                result["systemSkipped"]+=1
-                   except json.JSONDecodeError:
+                    line = entry['line']
+                    try:
+                        log_entry = json.loads(line)
+                        if log_entry.get("msg") == "Slow query":
+                            timestamp = log_entry.get("t", {}).get("$date")
+                            if timestamp:
+                                dtime = datetime.fromisoformat(timestamp)
+                                day  = dtime.strftime('%Y%m%d')
+                                dhour = dtime.strftime('%Y-%m-%d_%H')
+                                if lastHours is None :
+                                    lastHours = dhour
+                                if not (lastHours == dhour) or len(data) >= chunk_size:
+                                    dumpAggregation=not (lastHours == dhour)
+                                    lastHours = dhour
+                                    it+=1
+                                    append_to_parquet(data, parquet_file_path_base,dtime, it,save_by_chunk,dumpAggregation,result)
+                                    if result["countOfSlow"]%200000==0:
+                                        end_time = time.time()
+                                        elapsed_time_ms = (end_time - start_time) * 1000
+                                        print(f"loaded {result["countOfSlow"]} slow queries in {elapsed_time_ms} ms")
+                                    data = []  # Clear list to free memory
+                                if extractSlowQueryInfos(data, log_entry):
+                                    output_file.write(line)
+                                else:
+                                    result["systemSkipped"]+=1
+                    except json.JSONDecodeError:
                         # Skip lines that are not valid JSON
                         continue
 
                 # Handle any remaining data
                 if data:
                     it+=1
-                    append_to_parquet(data, parquet_file_path_base,lastHours,it,save_by_chunk,True,result,True)
+                    append_to_parquet(data, parquet_file_path_base,dtime,it,save_by_chunk,True,result,True)
         print(f"Extracted {result["countOfSlow"]} slow queries have been saved to {output_file_path} and {parquet_file_path_base}")
         return result
 

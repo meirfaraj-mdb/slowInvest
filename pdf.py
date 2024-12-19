@@ -195,7 +195,8 @@ class PDF(FPDF):
         concurrent.futures.as_completed(cluster["futur"]["performanceAdvisorSuggestedIndexes"])
         cluster["performanceAdvisorSuggestedIndexes"]=cluster["futur"]["performanceAdvisorSuggestedIndexes"].result()
         del cluster["futur"]["performanceAdvisorSuggestedIndexes"]
-        cluster["performanceAdvisorSuggestedIndexes_count"] = len(cluster["performanceAdvisorSuggestedIndexes"].get('suggestedIndexes',[]))
+        cluster["performanceAdvisorSuggestedIndexes_count"] = len(cluster["performanceAdvisorSuggestedIndexes"]
+                                                                  .get('content',{}).get('suggestedIndexes',[]))
         displayCluster = [
             ["Cluster Name",'name'],
             ["Cluster Type",'clusterType'],
@@ -243,8 +244,8 @@ class PDF(FPDF):
         for k,v in advancedConfiguration.items():
             self.display_line(col_width,row_height,k,v)
 
-        if cluster["backupCompliance_configured"]:
-            self.subChapter_title(f"Advanced configuration")
+        if cluster["backupCompliance_configured"] == "True":
+            self.subChapter_title(f"Backup compliance")
             for k,v in cluster["backupCompliance"].items():
                 self.display_line(col_width,row_height,k,v)
 

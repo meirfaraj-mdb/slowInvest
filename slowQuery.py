@@ -126,6 +126,7 @@ def extract_slow_queries(log_file_path, output_file_path, chunk_size=50000,save_
     createDirs(parquet_file_path_base)
     it=0
     lastHours = None
+    dtime = None
     with open(output_file_path, 'w') as output_file:
         with open(log_file_path, 'r') as log_file:
             for line in log_file:
@@ -134,14 +135,16 @@ def extract_slow_queries(log_file_path, output_file_path, chunk_size=50000,save_
                     if log_entry.get("msg") == "Slow query":
                         timestamp = log_entry.get("t", {}).get("$date")
                         if timestamp:
-                            hour = datetime.fromisoformat(timestamp).strftime('%Y-%m-%d_%H')
+                            dtime = datetime.fromisoformat(timestamp)
+                            day  = dtime.strftime('%Y%m%d')
+                            dhour = dtime.strftime('%Y-%m-%d_%H')
                             if lastHours is None :
-                                lastHours = hour
-                            if not (lastHours == hour) or len(data) >= chunk_size:
-                                dumpAggregation=not (lastHours == hour)
-                                lastHours = hour
+                                lastHours = dhour
+                            if not (lastHours == dhour) or len(data) >= chunk_size:
+                                dumpAggregation=not (lastHours == dhour)
+                                lastHours = dhour
                                 it+=1
-                                append_to_parquet(data, parquet_file_path_base,lastHours, it,save_by_chunk,dumpAggregation,result)
+                                append_to_parquet(data, parquet_file_path_base,dtime, it,save_by_chunk,dumpAggregation,result)
                                 if result["countOfSlow"]%200000==0:
                                     end_time = time.time()
                                     elapsed_time_ms = (end_time - start_time) * 1000
@@ -158,7 +161,7 @@ def extract_slow_queries(log_file_path, output_file_path, chunk_size=50000,save_
     # Handle any remaining data
     if data:
         it+=1
-        append_to_parquet(data, parquet_file_path_base,lastHours,it,save_by_chunk,True,result,True)
+        append_to_parquet(data, parquet_file_path_base,dtime,it,save_by_chunk,True,result,True)
     print(f"Extracted {result["countOfSlow"]} slow queries have been saved to {output_file_path} and {parquet_file_path_base}")
     return result
 
@@ -176,7 +179,7 @@ def concat_command_shape_aggA(arr):
             if operation == 'sum':
                 final_agg[key] = group[key].sum()
             elif operation == 'count':
-                final_agg[key] = group[key].count()  # Changed to correct count logic
+                final_agg[key] = group[key].sum()  # Changed to correct count logic
             elif operation == 'mean':
                 sum_column = f"{column}_total"
                 count_column = f"{column}_count"
@@ -240,18 +243,22 @@ def concat_command_shape_agg(df1,df2):
     dfca = concatenated.groupby('command_shape').apply(aggregate_group)
     return dfca
 
-def append_to_parquet(data, file_path_base,hour,id,save_by_chunk,dumpAggregation,result,saveAll=False):
+
+def append_to_parquet(data, file_path_base,dtime,id,save_by_chunk,dumpAggregation,result,saveAll=False):
+    day  = dtime.strftime('%Y%m%d')
+    hour = dtime.strftime('%H')
+    dhour = dtime.strftime('%Y-%m-%d_%H')
     result["countOfSlow"]+=len(data)
-    file_path=f"{file_path_base}{hour}/"
+    file_path=f"{file_path_base}{day}/{hour}/"
     createDirs(file_path)
     df_chunk = pd.DataFrame(data, columns=DF_COL)
-    updateCommandShapeGroupHour(df_chunk[df_chunk['changestream'] == False], hour, result, "groupByCommandShape")
-    updateCommandShapeGroupHour(df_chunk[df_chunk['changestream'] == True], hour, result, "groupByCommandShapeChangeStream")
+    updateCommandShapeGroupHour(df_chunk[df_chunk['changestream'] == False], dhour, result, "groupByCommandShape")
+    updateCommandShapeGroupHour(df_chunk[df_chunk['changestream'] == True], dhour, result, "groupByCommandShapeChangeStream")
 
     if save_by_chunk == "parquet":
         write_parquet(df_chunk, f"{file_path}/{id}_orig.parquet")
         if dumpAggregation or saveAll :
-            write_parquet(result["groupByCommandShape"][hour], f"{file_path}/{id}_groupByShape.parquet")
+            write_parquet(result["groupByCommandShape"][dhour], f"{file_path}/{id}_groupByShape.parquet")
         if saveAll:
             updateCommandShapeGroupGlobal(result)
             write_parquet(result["groupByCommandShape"]["global"], f"{file_path_base}/{id}_groupByShapeAll.parquet")
@@ -259,7 +266,7 @@ def append_to_parquet(data, file_path_base,hour,id,save_by_chunk,dumpAggregation
         #split for compact json
         df_chunk.to_json(f"{file_path}/{id}_orig.json", orient = 'records', compression = 'infer')
         if dumpAggregation or saveAll:
-            result["groupByCommandShape"][hour].to_json(f"{file_path}/{id}_groupByShape.json", orient = 'records', compression = 'infer')
+            result["groupByCommandShape"][dhour].to_json(f"{file_path}/{id}_groupByShape.json", orient = 'records', compression = 'infer')
         if saveAll:
             updateCommandShapeGroupGlobal(result)
             result["groupByCommandShape"]["global"].to_json(f"{file_path_base}/{id}_groupByShapeAll.json", orient = 'records', compression = 'infer')
