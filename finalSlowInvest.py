@@ -402,6 +402,8 @@ def file_retrieval_mode(config,report):
 #----------------------------------------------------------------------------------------
 #  Main :
 if __name__ == "__main__":
+    if sys.version_info[0:2] != (3, 12):
+        raise Exception('Requires python 3.12')
     start_time_all=time.time()
     first_option = sys.argv[1] if len(sys.argv) > 1 else None
     # Use the first_option in your Config class or elsewhere
