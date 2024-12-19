@@ -1,8 +1,5 @@
-from dbm import error
-
 import requests
 from requests.auth import HTTPDigestAuth
-import json
 import concurrent
 from slowQuery import *
 import re
@@ -58,23 +55,24 @@ class AtlasApi():
 
     # retrieve slow queries
     def retrieveLast24HSlowQueriesFromCluster(self,groupId,processId, output_file_path, chunk_size=50000,save_by_chunk="none"):
-        result=init_result()
+        parquet_file_path_base=f"{remove_extension(output_file_path)}/"
+        createDirs(parquet_file_path_base)
+        result=init_result(parquet_file_path_base)
         data = []
         start_time = time.time()
         last_count = -1
-        parquet_file_path_base=f"{remove_extension(output_file_path)}/"
-        createDirs(parquet_file_path_base)
         sl_output_file_path = f"{output_file_path}/slow_queries_{groupId}_{processId}.log"
-        it=0
+        it= result["resume"].get("id",0)
         lastHours = None
-        dtime = None
-        dt = None
+        dtime = result["resume"].get("dtime",None)
         with open(sl_output_file_path, 'w', encoding='utf-8') as output_file:
-            while last_count <0 or last_count>=20000 :
+            while last_count <0 or last_count>=15000 :
                 path=f"/groups/{groupId}/processes/{processId}/performanceAdvisor/slowQueryLogs"
                 arg={}
-                if not (dt is None):
-                    arg={"since": str(time.mktime(dt.timetuple()))}
+                if not (dtime is None):
+                    since=str(int(time.mktime(dtime.timetuple())*1000))
+                    print(f"executing slowQuery {processId} : since : {since}")
+                    arg={"since": since}
                 resp=self.atlas_request('SlowQueries', path, '2023-01-01', arg)
                 last_count=len(resp['slowQueries'])
                 for entry in resp['slowQueries']:
@@ -509,7 +507,7 @@ class AtlasApi():
         return cluster
 
 # missing
-    def get_clusters_composition(self,group_id=None,cluster_name=None):
+    def get_clusters_composition(self,group_id=None,cluster_name=None,full=True):
         result=[]
 
         #Group_id None not yet supported
@@ -533,11 +531,12 @@ class AtlasApi():
         for cluster in clusters.get('results',[]):
             cluster_name=cluster.get('name')
             cluster["futur"]={}
-            cluster["futur"]["performanceAdvisorSuggestedIndexes"] = pool.submit(self.getPerformanceAdvisorSuggestedIndexes,group_id,cluster_name)
-            cluster["futur"]["onlineArchiveForOneCluster"] = pool.submit(self.getAllOnlineArchiveForOneCluster,group_id,cluster_name)
-            cluster["futur"]["backupCompliance"] = pool.submit(self.getBackupCompliance,group_id)
-            cluster["futur"]["backup"] = pool.submit(self.listAllBackupSnapshotForCluster,group_id,cluster_name,cluster["clusterType"])
-            cluster["futur"]["advancedConfiguration"] = pool.submit(self.getAdvancedConfigurationForOneCluster,group_id, cluster_name)
+            if full:
+                cluster["futur"]["performanceAdvisorSuggestedIndexes"] = pool.submit(self.getPerformanceAdvisorSuggestedIndexes,group_id,cluster_name)
+                cluster["futur"]["onlineArchiveForOneCluster"] = pool.submit(self.getAllOnlineArchiveForOneCluster,group_id,cluster_name)
+                cluster["futur"]["backupCompliance"] = pool.submit(self.getBackupCompliance,group_id)
+                cluster["futur"]["backup"] = pool.submit(self.listAllBackupSnapshotForCluster,group_id,cluster_name,cluster["clusterType"])
+                cluster["futur"]["advancedConfiguration"] = pool.submit(self.getAdvancedConfigurationForOneCluster,group_id, cluster_name)
 
             replicationSpecs = cluster.get('replicationSpecs',None)
             providersSet = set()

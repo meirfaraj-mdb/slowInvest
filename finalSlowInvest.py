@@ -11,10 +11,6 @@
 
 #pip install git+https://github.com/andersonhc/fpdf2.git@page-number
 
-from collections import defaultdict
-from turtledemo.penrose import start
-
-import seaborn as sns
 import matplotlib.pyplot as plt
 from tabulate import tabulate
 
@@ -305,7 +301,7 @@ def atlas_retrieval_mode(config,report):
     if config.ATLAS_RETRIEVAL_SCOPE == "project":
         print(f"Get project {config.GROUP_ID} composition....")
         start_time_comp = time.time()
-        compositions = atlasApi.get_clusters_composition(config.GROUP_ID)
+        compositions = atlasApi.get_clusters_composition(config.GROUP_ID,full=config.GENERATE_INFRA_REPORT)
         end_time_comp = time.time()
         print(f"Received project {config.GROUP_ID} composition in {convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)}")
         for cluster in compositions :
@@ -316,7 +312,7 @@ def atlas_retrieval_mode(config,report):
         for cluster_name in config.CLUSTERS_NAME:
             print(f"Get cluster {cluster_name} composition....")
             start_time_comp = time.time()
-            compositions = atlasApi.get_clusters_composition(config.GROUP_ID,cluster_name)
+            compositions = atlasApi.get_clusters_composition(config.GROUP_ID,cluster_name,full=config.GENERATE_INFRA_REPORT)
             end_time_comp = time.time()
             print(f"Received cluster {cluster_name} composition in {convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)}")
             for cluster in compositions :

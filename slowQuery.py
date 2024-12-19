@@ -1,12 +1,12 @@
-from array import array
-from datetime import datetime
+from datetime import datetime, timedelta
+
 import pandas as pd
 import json
 import os
 import time
 import pyarrow as pa
 import pyarrow.parquet as pq
-from requests import delete
+import os.path
 
 DF_COL = ['timestamp','hour', 'db', 'namespace', 'slow_query_count', 'durationMillis','planningTimeMicros', 'has_sort_stage', 'query_targeting',
           'plan_summary', 'command_shape', 'writeConflicts', 'skip', 'limit', 'appName', 'changestream', 'usedDisk',
@@ -109,24 +109,48 @@ def getCommanShapeAggOp():
 def groupbyCommandShape(df):
     return df.groupby('command_shape').agg(**getCommanShapeAggOp()).reset_index()
 
+def makeSureLessThan24H(time):
+    """
+    Check if the given datetime is within the last 24 hours from the current time.
+    Parameters:
+    target_time (datetime): The datetime object to check.
+    Returns:
+    datetime or None: The target_time if it's within 24 hours, otherwise None.
+    """
+    current_time = datetime.now()
+    time_difference = current_time - time
 
-def init_result():
+    if time_difference < timedelta(hours=24):
+        return time
+    else:
+        return None
+
+def init_result(file_path_base):
     result={}
     result["countOfSlow"]=0
     result["systemSkipped"]=0
     result["groupByCommandShape"]={}
     result["groupByCommandShapeChangeStream"]={}
+    result["resume"]={}
+    if os.path.isfile(f"{file_path_base}resume.json"):
+        with open(f"{file_path_base}resume.json") as out_file:
+            result["resume"]=json.load(out_file)
+        dtime=result["resume"].get("dtime",None)
+        if dtime is not None:
+            result["resume"]["dtime"]=datetime.fromisoformat(dtime)
     return result
 # Function for extracting from File :
 def extract_slow_queries(log_file_path, output_file_path, chunk_size=50000,save_by_chunk="none"):
-    result=init_result()
+
+    parquet_file_path_base=f"{remove_extension(output_file_path)}/"
+    result=init_result(parquet_file_path_base)
     data = []
     start_time = time.time()
-    parquet_file_path_base=f"{remove_extension(output_file_path)}/"
+
     createDirs(parquet_file_path_base)
     it=0
     lastHours = None
-    dtime = None
+    dtime = result.get("resume",{}).get(None)
     with open(output_file_path, 'w') as output_file:
         with open(log_file_path, 'r') as log_file:
             for line in log_file:
@@ -244,30 +268,40 @@ def concat_command_shape_agg(df1,df2):
     return dfca
 
 
-def append_to_parquet(data, file_path_base,dtime,id,save_by_chunk,dumpAggregation,result,saveAll=False):
+def append_to_parquet(data, file_path_base,dtime,id,save_by_chunk,dumpAggregation,result,saveAll=False,
+                      generate_orig_only=False):
     day  = dtime.strftime('%Y%m%d')
     hour = dtime.strftime('%H')
     dhour = dtime.strftime('%Y-%m-%d_%H')
     result["countOfSlow"]+=len(data)
-    file_path=f"{file_path_base}{day}/{hour}/"
+    if saveAll:
+        result["resume"]["id"]=id
+        result["resume"]["dtime"]=dtime.isoformat()
+        out_file = open(f"{file_path_base}resume.json", "w")
+        json.dump(result["resume"], out_file)
+        out_file.close()
+    file_path_base=f"{file_path_base}{day}/"
+    file_path=f"{file_path_base}{hour}/"
     createDirs(file_path)
     df_chunk = pd.DataFrame(data, columns=DF_COL)
-    updateCommandShapeGroupHour(df_chunk[df_chunk['changestream'] == False], dhour, result, "groupByCommandShape")
-    updateCommandShapeGroupHour(df_chunk[df_chunk['changestream'] == True], dhour, result, "groupByCommandShapeChangeStream")
+    if not generate_orig_only :
+       updateCommandShapeGroupHour(df_chunk[df_chunk['changestream'] == False], dhour, result, "groupByCommandShape")
+       updateCommandShapeGroupHour(df_chunk[df_chunk['changestream'] == True], dhour, result, "groupByCommandShapeChangeStream")
+
 
     if save_by_chunk == "parquet":
         write_parquet(df_chunk, f"{file_path}/{id}_orig.parquet")
-        if dumpAggregation or saveAll :
+        if (dumpAggregation or saveAll) and (not generate_orig_only) :
             write_parquet(result["groupByCommandShape"][dhour], f"{file_path}/{id}_groupByShape.parquet")
-        if saveAll:
+        if saveAll and (not generate_orig_only):
             updateCommandShapeGroupGlobal(result)
             write_parquet(result["groupByCommandShape"]["global"], f"{file_path_base}/{id}_groupByShapeAll.parquet")
     elif save_by_chunk == "json":
         #split for compact json
         df_chunk.to_json(f"{file_path}/{id}_orig.json", orient = 'records', compression = 'infer')
-        if dumpAggregation or saveAll:
+        if (dumpAggregation or saveAll) and (not generate_orig_only):
             result["groupByCommandShape"][dhour].to_json(f"{file_path}/{id}_groupByShape.json", orient = 'records', compression = 'infer')
-        if saveAll:
+        if saveAll and (not generate_orig_only):
             updateCommandShapeGroupGlobal(result)
             result["groupByCommandShape"]["global"].to_json(f"{file_path_base}/{id}_groupByShapeAll.json", orient = 'records', compression = 'infer')
 
@@ -283,7 +317,7 @@ def updateCommandShapeGroupGlobal(result):
         array = []
         keys = []
         for key,value in result[type].items():
-            if value.shape[0] > 0:
+            if value is not None and value.shape[0] > 0:
                 value["hour"]=key
                 array.append(value)
             keys.append(key)

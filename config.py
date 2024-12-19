@@ -58,6 +58,15 @@ class Config():
         self.MINIMUM_DURATION_FOR_QUERYSHAPE = self.config.get('MINIMUM_DURATION_FOR_QUERYSHAPE',0)
         self.INSERT_GRAPH_SUMMARY_TO_REPORT =self.config.get('INSERT_GRAPH_SUMMARY_TO_REPORT',True)
         #self.ADD_MAX_QUERY =  self.config.get('ADD_MAX_QUERY',True)
+        self.GENERATE_INFRA_REPORT = self.config.get('GENERATE_INFRA_REPORT',True)
+
+        self.GENERATE_ORIG_FILE_ONLY = self.config.get('GENERATE_ORIG_FILE_ONLY',False)
+        if self.GENERATE_ORIG_FILE_ONLY:
+            self.GENERATE_MD = False
+            self.GENERATE_INFRA_REPORT=False
+            self.GENERATE_PNG =False
+            self.INSERT_GRAPH_SUMMARY_TO_REPORT=False
+            self.GENERATE_PDF_REPORT=False
         print(matplotlib.rcsetup.all_backends)
         list(colormaps)
 

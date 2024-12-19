@@ -178,9 +178,14 @@ class PDF(FPDF):
         row_height = self.font_size * 1.5
 
         concurrent.futures.as_completed(cluster["futur"]["backupCompliance"])
-        cluster["backupCompliance"]=cluster["futur"]["backupCompliance"].result()
+        try:
+            cluster["backupCompliance"]=cluster["futur"]["backupCompliance"].result()
+        except Exception as exc:
+            print(f"failed to retrieve the backupCompliance : {exc}")
+            cluster["backupCompliance_configured"]="Fail to retrieve"
+        else:
+            cluster["backupCompliance_configured"]="True" if len(cluster["backupCompliance"])>0 else "False"
         del cluster["futur"]["backupCompliance"]
-        cluster["backupCompliance_configured"]="True" if len(cluster["backupCompliance"])>0 else "False"
 
         concurrent.futures.as_completed(cluster["futur"]["backup"])
         cluster["backup_snapshot"]=cluster["futur"]["backup"].result().get("results",[])
