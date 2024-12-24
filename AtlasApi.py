@@ -1,10 +1,11 @@
 import requests
 from requests.auth import HTTPDigestAuth
-import concurrent
 from slowQuery import *
 import re
 import time
+import msgspec
 
+decoder = msgspec.json.Decoder()
 def convert_list_to_dict(databases):
     """
     Converts a list of database names into a dictionary with each database name
@@ -47,7 +48,7 @@ class AtlasApi():
                 print(f"Error in {op}: {response.status_code} - {response.text}")
                 response.raise_for_status()  # This will raise an HTTPError for bad responses
             #print(f"{op} response: {response.text}")
-            return json.loads(response.text)
+            return decoder.decode(response.text)
         except requests.exceptions.RequestException as e:
             # Catch any request-related errors
             print(f"Request failed for {op}: {e}")
@@ -64,6 +65,7 @@ class AtlasApi():
         sl_output_file_path = f"{output_file_path}/slow_queries_{groupId}_{processId}.log"
         it= result["resume"].get("id",0)
         lastHours = None
+        lastPrint=0
         dtime = result["resume"].get("dtime",None)
         with open(sl_output_file_path, 'w', encoding='utf-8') as output_file:
             while last_count <0 or last_count>=15000 :
@@ -78,7 +80,7 @@ class AtlasApi():
                 for entry in resp['slowQueries']:
                     line = entry['line']
                     try:
-                        log_entry = json.loads(line)
+                        log_entry = decoder.decode(line)
                         if log_entry.get("msg") == "Slow query":
                             timestamp = log_entry.get("t", {}).get("$date")
                             if timestamp:
@@ -87,21 +89,22 @@ class AtlasApi():
                                 dhour = dtime.strftime('%Y-%m-%d_%H')
                                 if lastHours is None :
                                     lastHours = dhour
-                                if not (lastHours == dhour) or len(data) >= chunk_size:
-                                    dumpAggregation=not (lastHours == dhour)
+                                if (lastHours != dhour) or len(data) >= chunk_size:
+                                    dumpAggregation=(lastHours != dhour)
                                     lastHours = dhour
                                     it+=1
                                     append_to_parquet(data, parquet_file_path_base,dtime, it,save_by_chunk,dumpAggregation,result)
-                                    if result["countOfSlow"]%200000==0:
+                                    data = []  # Clear list to free memory
+                                    if result["countOfSlow"]-lastPrint>0 and result["countOfSlow"]-lastPrint>50000:
+                                        lastPrint=result["countOfSlow"]
                                         end_time = time.time()
                                         elapsed_time_ms = (end_time - start_time) * 1000
-                                        print(f"loaded {result["countOfSlow"]} slow queries in {elapsed_time_ms} ms")
-                                    data = []  # Clear list to free memory
+                                        print(f"loaded {result["countOfSlow"]} slow queries in {convertToHumanReadable("Millis",elapsed_time_ms)}")
                                 if extractSlowQueryInfos(data, log_entry):
                                     output_file.write(line)
                                 else:
                                     result["systemSkipped"]+=1
-                    except json.JSONDecodeError:
+                    except msgspec.MsgspecError:
                         # Skip lines that are not valid JSON
                         continue
 
@@ -489,7 +492,7 @@ class AtlasApi():
 
     def calculate_instance_composition(self, cluster):
         instance_composition = {}
-        if cluster['clusterType'] == "SHARDED" and not (cluster["configServerType"]=="EMBEDDED") :
+        if cluster['clusterType'] == "SHARDED" and (cluster["configServerType"]!="EMBEDDED") :
             instance_composition["M30"] = 3
         for cspec in cluster['replicationSpecs']:
             for spec in cspec['regionConfigs']:

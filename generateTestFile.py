@@ -1,8 +1,6 @@
-import json
 import os
 import sys
 from config import Config
-import shutil
 
 def get_file_size(filepath):
     """Returns the file size in bytes."""

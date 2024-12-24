@@ -1,13 +1,16 @@
 from datetime import datetime, timedelta
-
 import pandas as pd
-import json
 import os
 import time
 import pyarrow as pa
 import pyarrow.parquet as pq
 import os.path
-
+import msgspec
+import gzip
+from utils import convertToHumanReadable
+import concurrent
+encoder = msgspec.json.Encoder()
+decoder = msgspec.json.Decoder()
 DF_COL = ['timestamp','hour', 'db', 'namespace', 'slow_query_count', 'durationMillis','planningTimeMicros', 'has_sort_stage', 'query_targeting',
           'plan_summary', 'command_shape', 'writeConflicts', 'skip', 'limit', 'appName', 'changestream', 'usedDisk',
           'fromMultiPlanner','replanned','replanReason',
@@ -33,25 +36,9 @@ def createDirs(directory_path):
 
 def remove_extension(file_path):
     root, _ = os.path.splitext(file_path)
+    if root.endswith(".log"):
+        root, _ = os.path.splitext(root)
     return root
-
-
-def process_chunk_for_average(chunk, running_sums, running_counts):
-    # Calculate the sum for this chunk
-    chunk_sums = chunk.groupby('namespace')['value'].sum()
-
-    # Calculate the count for this chunk
-    chunk_counts = chunk.groupby('namespace')['value'].count()
-
-    # Update running totals and counts
-    running_sums = running_sums.add(chunk_sums, fill_value=0)
-    running_counts = running_counts.add(chunk_counts, fill_value=0)
-
-    return running_sums, running_counts
-# Initialize empty Series for running sums and counts
-running_sums = pd.Series(dtype='float64')
-running_counts = pd.Series(dtype='int64')
-
 
 
 def distinct_values(series):
@@ -86,6 +73,7 @@ def getCommanShapeAggOp():
         'replanReason':('replanReason', distinct_values),
         'plan_summary': ('plan_summary', distinct_values),
         'app_name': ('appName', distinct_values),
+        'db': ('db', distinct_values),
         'namespace': ('namespace', distinct_values),
         'cmdType':('cmdType', distinct_values),
         'count_of_in':('count_of_in', distinct_values),
@@ -134,29 +122,88 @@ def init_result(file_path_base):
     result["resume"]={}
     if os.path.isfile(f"{file_path_base}resume.json"):
         with open(f"{file_path_base}resume.json") as out_file:
-            result["resume"]=json.load(out_file)
+            result["resume"]=decoder.decode(out_file.read())
         dtime=result["resume"].get("dtime",None)
         if dtime is not None:
             result["resume"]["dtime"]=datetime.fromisoformat(dtime)
     return result
+
+
+
+class BufferedGzipWriter:
+    def __init__(self, file_path, mode, buffer_size=4092):
+        self.file_path = file_path
+        self.buffer_size = buffer_size
+        self._buffer = []
+        self.gz_file = None
+        self.curSize=0
+        self.mode=mode
+        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+    def __enter__(self):
+        # Open the gzip file and return the instance itself
+        self.gz_file = gzip.open(self.file_path, self.mode, compresslevel=6)
+        return self
+    def write(self, data):
+        self._buffer.append(data)
+        self.curSize+=len(data)
+        if self.curSize >= self.buffer_size:
+            self.flush()
+    def flush(self):
+        if self._buffer and self.gz_file is not None:
+            self.pool.submit(self.gz_file.writelines,self._buffer)
+            self._buffer = []
+            self.curSize=0
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Ensure flushing and closing of the gz_file
+        self.close()
+    def close(self):
+        if self.gz_file is not None:
+            self.flush()
+            self.pool.shutdown(wait=True)
+            self.gz_file.close()
+            self.gz_file = None  # Ensure it can't be used after closing
+
+
 # Function for extracting from File :
 def extract_slow_queries(log_file_path, output_file_path, chunk_size=50000,save_by_chunk="none"):
-
     parquet_file_path_base=f"{remove_extension(output_file_path)}/"
     result=init_result(parquet_file_path_base)
     data = []
     start_time = time.time()
 
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
     createDirs(parquet_file_path_base)
     it=0
+    lastPrint=0
     lastHours = None
     dtime = result.get("resume",{}).get(None)
-    with open(output_file_path, 'w') as output_file:
-        with open(log_file_path, 'r') as log_file:
+    # Detecting if the log file is gzipped
+    if log_file_path.endswith('.gz'):
+        log_open = lambda path: gzip.open(path, 'rt')
+    else:
+        log_open = lambda path: open(path, 'rt', buffering=4092)
+
+    #if output_file_path.endswith('.gz'):
+
+    with BufferedGzipWriter(f"{output_file_path}.gz","wt") as output_file:
+        with log_open(log_file_path) as log_file:
             for line in log_file:
                 try:
-                    log_entry = json.loads(line)
-                    if log_entry.get("msg") == "Slow query":
+                    if len(line)<10:
+                        continue
+                    strings = ("Slow query")
+                    find = False
+                    if any(s in line for s in strings):
+                       find=True
+                    if not find :
+                        continue
+                    #log_entry = next(ijson.items(line, ''))
+                    log_entry = decoder.decode(line)
+                    if log_entry.get("msg",None) == "Slow query":
+                        # Fully parse the JSON object since the condition is true
                         timestamp = log_entry.get("t", {}).get("$date")
                         if timestamp:
                             dtime = datetime.fromisoformat(timestamp)
@@ -164,36 +211,41 @@ def extract_slow_queries(log_file_path, output_file_path, chunk_size=50000,save_
                             dhour = dtime.strftime('%Y-%m-%d_%H')
                             if lastHours is None :
                                 lastHours = dhour
-                            if not (lastHours == dhour) or len(data) >= chunk_size:
-                                dumpAggregation=not (lastHours == dhour)
+                            if lastHours != dhour or len(data) >= chunk_size:
+                                dumpAggregation=(lastHours != dhour)
                                 lastHours = dhour
                                 it+=1
-                                append_to_parquet(data, parquet_file_path_base,dtime, it,save_by_chunk,dumpAggregation,result)
-                                if result["countOfSlow"]%200000==0:
+                                pool.submit(append_to_parquet,data, parquet_file_path_base,dtime, it,save_by_chunk,dumpAggregation,result)
+                                data = []  # Clear list to free memory
+                                if result["countOfSlow"]-lastPrint>0 and result["countOfSlow"]-lastPrint>50000:
+                                    lastPrint=result["countOfSlow"]
                                     end_time = time.time()
                                     elapsed_time_ms = (end_time - start_time) * 1000
-                                    print(f"loaded {result["countOfSlow"]} slow queries in {elapsed_time_ms} ms")
-                                data = []  # Clear list to free memory
+                                    print(f"loaded {result["countOfSlow"]} slow queries in {convertToHumanReadable("Millis",elapsed_time_ms)}")
                         if extractSlowQueryInfos(data, log_entry):
                             output_file.write(line)
                         else:
                             result["systemSkipped"]+=1
-                except json.JSONDecodeError:
+                except msgspec.MsgspecError:
                     # Skip lines that are not valid JSON
                     continue
-
     # Handle any remaining data
     if data:
         it+=1
-        append_to_parquet(data, parquet_file_path_base,dtime,it,save_by_chunk,True,result,True)
+        pool.submit(append_to_parquet,data, parquet_file_path_base,dtime,it,save_by_chunk,True,result,True)
+    pool.shutdown(wait=True)
     print(f"Extracted {result["countOfSlow"]} slow queries have been saved to {output_file_path} and {parquet_file_path_base}")
     return result
 
-def concat_command_shape_aggA(arr):
+def concat_command(arr):
     # Concatenate the DataFrame; this will need care taken for recalculations
     if len(arr)==0:
         return None
-    concatenated = pd.concat(arr, ignore_index=True)
+    return pd.concat(arr, ignore_index=True)
+
+def shape_aggA(concatenated):
+    if concatenated is None:
+        return None
     agg_operations=getCommanShapeAggOp()
     # Apply aggregation per group
     def aggregate_group(group):
@@ -277,9 +329,8 @@ def append_to_parquet(data, file_path_base,dtime,id,save_by_chunk,dumpAggregatio
     if saveAll:
         result["resume"]["id"]=id
         result["resume"]["dtime"]=dtime.isoformat()
-        out_file = open(f"{file_path_base}resume.json", "w")
-        json.dump(result["resume"], out_file)
-        out_file.close()
+        with open(f"{file_path_base}resume.json", "w") as out_file:
+            encoder.encode(result["resume"])
     file_path_base=f"{file_path_base}{day}/"
     file_path=f"{file_path_base}{hour}/"
     createDirs(file_path)
@@ -323,7 +374,8 @@ def updateCommandShapeGroupGlobal(result):
             keys.append(key)
         for key in keys:
             del result[type][key]
-        result[type]["global"] = concat_command_shape_aggA(array)
+        result[type]["hours"] = concat_command(array)
+        result[type]["global"] = shape_aggA(result[type]["hours"])
     return True
 
 
@@ -577,7 +629,7 @@ def get_command_shape(command,namespace):
         res=replace_values(obj)
         if isinstance(res, str):
             return res
-        return json.dumps(res)
+        return encoder.encode(res)
     def replace_values(obj):
         if isinstance(obj, dict):
             new_obj = {}
@@ -643,4 +695,4 @@ def get_command_shape(command,namespace):
     # Handle the pipeline separately
     if "pipeline" in command:
         command_shape["pipeline"] = handle_pipeline(command["pipeline"])
-    return json.dumps(command_shape), in_counts, str(db)
+    return encoder.encode(command_shape), in_counts, str(db)

@@ -1,22 +1,10 @@
-# python.exe -m pip install --upgrade pip
-# pip install requests
-# pip install pandas
-# pip install seaborn
-# pip install matplotlib
-# pip install tabulate
-# pip install PdfReader
-# pip uninstall fpdf2
-# pip install pyarrow
-# pip install pyyaml
 
-#pip install git+https://github.com/andersonhc/fpdf2.git@page-number
+#  pip install -r requirements.txt
 
 import matplotlib.pyplot as plt
 from tabulate import tabulate
-
 from AtlasApi import AtlasApi
 from report import Report
-from utils import *
 from slowQuery import *
 from config import Config
 import sys
@@ -154,9 +142,10 @@ def addToReport(result,prefix,report,config):
         return
 
     # Aggregate the data to ensure unique hour-namespace combinations
-    report.subChapter_title("Graphics")
-#    createGraphByDb(config, result, prefix, report)
-#    createGraphByNamespace(config, result, prefix, report)
+    if config.INSERT_GRAPH_SUMMARY_TO_REPORT:
+        report.subChapter_title("Graphics")
+        createGraphByDb(config, result, prefix, report)
+        createGraphByNamespace(config, result, prefix, report)
 
     # Group by command shape and calculate statistics
     command_shape_stats = result["groupByCommandShape"].get("global",{})
@@ -211,33 +200,35 @@ def addCommandShapAnalysis(command_shape_stats, config, report):
     display_queries("List of other query shape", report, without_badIn)
 
 
-def createGraphByNamespace(config, df, df_withoutChangestream, prefix, report):
+def createGraphByNamespace(config, result, prefix, report):
     groupByCondition = 'namespace'
-    createGraphBy(config, df, df_withoutChangestream, groupByCondition, prefix, report)
+    createGraphBy(config, result, groupByCondition, prefix, report)
 
-def createGraphByDb(config, df, df_withoutChangestream, prefix, report):
+def createGraphByDb(config, result, prefix, report):
     groupByCondition = 'db'
-    createGraphBy(config, df, df_withoutChangestream, groupByCondition, prefix, report)
+    createGraphBy(config, result, groupByCondition, prefix, report)
 
+# TODO: has sort stage need fix
+def aggregateForGraph(df,groupByConditions):
+    for cond in groupByConditions:
+        if cond != 'hour':
+            df[cond] = df[cond].apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x)
+    return df.groupby(groupByConditions).agg(
+        slow_query_count=('slow_query_count', 'sum'),
+        total_duration=('durationMillis_total', 'sum'),
+        writeConflicts=('writeConflicts_total', 'sum'),
+        has_sort_stage=('has_sort_stage', 'sum'),
+        sum_skip=('skip_total', 'sum'),
+        query_targeting=('query_targeting_max', 'max')).reset_index()
 
-def createGraphBy(config, df, df_withoutChangestream, groupByCondition, prefix, report):
+def createGraphBy(config, result, groupByCondition, prefix, report):
     if config.INSERT_GRAPH_SUMMARY_TO_REPORT:
-      df = df.groupby(['hour', groupByCondition]).agg(
-         slow_query_count=('slow_query_count', 'sum'),
-         total_duration=('durationMillis', 'sum'),
-         writeConflicts=('writeConflicts', 'sum'),
-         has_sort_stage=('has_sort_stage', 'sum'),
-         sum_skip=('skip', 'sum'),
-         query_targeting=('query_targeting', 'max')).reset_index()
+      if result["groupByCommandShape"]["hours"] is None or len(result["groupByCommandShape"]["hours"])==0:
+          return
+      df = aggregateForGraph(result["groupByCommandShape"]["hours"],['hour', groupByCondition])
       all_group = df[groupByCondition].unique()
       report.chapter_body(f"{groupByCondition} List : {all_group}")
-      df_plan_summary = df_withoutChangestream.groupby(['hour', groupByCondition, 'plan_summary']).agg(
-        slow_query_count=('slow_query_count', 'sum'),
-        writeConflicts=('writeConflicts', 'sum'),
-        total_duration=('durationMillis', 'sum'),
-        has_sort_stage=('has_sort_stage', 'sum'),
-        sum_skip=('skip', 'sum'),
-        query_targeting=('query_targeting', 'max')).reset_index()
+      df_plan_summary = aggregateForGraph(result["groupByCommandShape"]["hours"],['hour', groupByCondition, 'plan_summary'])
 
       # Plot number of slow queries per hour per groupByCondition
       report.add_page()
@@ -423,4 +414,4 @@ if __name__ == "__main__":
     if not config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
         report.write(f"{config.REPORT_FILE_PATH}/slow_report")
     end_time_all=time.time()
-    print(f"work end in {convertToHumanReadable("Millis",(end_time_all-start_time_all)*1000,True)}")
+    print(f"work end in {convertToHumanReadable("Millis",(end_time_all-start_time_all)*1000)}")

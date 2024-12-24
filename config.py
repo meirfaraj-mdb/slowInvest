@@ -1,13 +1,14 @@
-import json
 import os
 import matplotlib
-from matplotlib import colormaps
+import msgspec
+
+decoder = msgspec.json.Decoder()
 
 # Load configuration from a JSON file
 def load_config(file_path):
     print(f"loading config from {file_path}")
     with open(file_path, 'r') as config_file:
-        config = json.load(config_file)
+        config = decoder.decode(config_file.read())
     return config
 
 def createDirs(directory_path):
@@ -67,8 +68,6 @@ class Config():
             self.GENERATE_PNG =False
             self.INSERT_GRAPH_SUMMARY_TO_REPORT=False
             self.GENERATE_PDF_REPORT=False
-        print(matplotlib.rcsetup.all_backends)
-        list(colormaps)
 
         if self.GENERATE_PNG:
             matplotlib.use("cairo")

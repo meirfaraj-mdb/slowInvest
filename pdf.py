@@ -1,8 +1,10 @@
-from fpdf import FPDF, TextStyle
+from fpdf import *
 from fpdf.enums import XPos,YPos
-import json
 from utils import *
 import concurrent
+import msgspec
+
+decoder = msgspec.json.Decoder()
 
 #------------------------------------------------------------------------------------
 # Pdf related
@@ -320,7 +322,7 @@ class PDF(FPDF):
         aggregated_values = {}
         # Process columns to aggregate min, max, avg, total
         for col in columns:
-            if col.endswith(('_min', '_max', '_avg', '_total')):
+            if col.endswith(('_min', '_max', '_avg', '_total',"_count")):
                 base_name = col.rsplit('_', 1)[0]
                 if base_name not in aggregated_values:
                     aggregated_values[base_name] = {}
@@ -331,7 +333,7 @@ class PDF(FPDF):
 
         # Process unique columns
         for col in columns:
-            if not col.endswith(('_min', '_max', '_avg', '_total')):
+            if not col.endswith(('_min', '_max', '_avg', '_total',"_count")):
                 value = row.get(col, 0)
                 if value == 0 or value == '' or value == '0':
                     continue
@@ -382,7 +384,7 @@ class PDF(FPDF):
         self.set_fill_color(240, 240, 240)  # Light gray background
         self.rect(x, y, w, h, 'F')  # Draw the box
         self.set_xy(x + 2, y + 2)  # Add some padding
-        self.write_html(self.json_to_html(json.loads(json_data)))
+        self.write_html(self.json_to_html(decoder.decode(json_data)))
 
     def json_to_html(self, json_data, indent=0):
         # Ensure indent is an integer
