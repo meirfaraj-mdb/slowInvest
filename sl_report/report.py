@@ -1,4 +1,4 @@
-from pdf import PDF
+from sl_report.pdf import PDF
 
 
 class Report():

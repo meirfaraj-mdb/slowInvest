@@ -1,6 +1,11 @@
+import concurrent
+
 import requests
 from requests.auth import HTTPDigestAuth
-from slowQuery import *
+
+from sl_async.slag import append_to_parquet
+from sl_json.json import extractSlowQueryInfos
+from sl_utils.utils import remove_extension, convertToHumanReadable
 import re
 import time
 import msgspec

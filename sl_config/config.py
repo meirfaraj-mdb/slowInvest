@@ -1,8 +1,11 @@
+import gc
 import os
 import matplotlib
 import msgspec
+import logging
 
 decoder = msgspec.json.Decoder()
+logging.basicConfig(level=logging.DEBUG)
 
 # Load configuration from a JSON file
 def load_config(file_path):
@@ -24,7 +27,7 @@ class Config():
         if configName:
             self.config = load_config(f"config/{configName}.json")
         else:
-            self.config = load_config(f"config/config.json")
+            self.config = load_config(f"../config/config.json")
         # Atlas / files / OpsManager
         self.RETRIEVAL_MODE = self.config.get('RETRIEVAL_MODE', 'files')
         # Atlas/Ops Manager related
@@ -73,7 +76,6 @@ class Config():
             matplotlib.use("cairo")
         else:
             matplotlib.use("svg")
-
         if self.RETRIEVAL_MODE == "Atlas":
             print(f"Retrieval Mode: {self.RETRIEVAL_MODE} with pub key:{self.PUBLIC_KEY}")
         elif self.RETRIEVAL_MODE == "files":
@@ -82,3 +84,10 @@ class Config():
             print(f"Retrieval Mode: {self.RETRIEVAL_MODE} with pub key:{self.PUBLIC_KEY}")
         else:
             raise ValueError(f"Unsupported RETRIEVAL_MODE: {self.RETRIEVAL_MODE}")
+        gc.collect(2)
+        gc.freeze()
+        allocs,gen1,gen2=gc.get_threshold()
+        allocs=300_000
+        gen1*=5
+        #gen2*=2
+        gc.set_threshold(allocs,gen1,gen2)

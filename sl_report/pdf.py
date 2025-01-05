@@ -1,6 +1,6 @@
 from fpdf import *
 from fpdf.enums import XPos,YPos
-from utils import *
+from sl_utils.utils import *
 import concurrent
 import msgspec
 

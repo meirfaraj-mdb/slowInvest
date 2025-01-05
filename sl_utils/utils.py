@@ -1,3 +1,4 @@
+import os
 
 
 def convertTimeToHumanReadable(name, val, rounded=False):
@@ -53,14 +54,14 @@ def convertTimeToHumanReadable(name, val, rounded=False):
     # Construct the human-readable time string
     time_str = ""
     if hours > 0:
-        time_str += f"{hours}H"
+        time_str += f"{int(hours)}H"
     if minutes > 0:
-        time_str += f"{minutes}min"
-    if seconds > 0:
-        time_str += f"{seconds}s"
-    if millis > 0:
+        time_str += f"{int(minutes)}min"
+    if seconds > 0 and int(hours)==0:
+        time_str += f"{int(seconds)}s"
+    if millis > 0 and int(hours+minutes)==0:
         time_str += f"{int(millis)}ms"
-    if micros > 0:
+    if micros > 0 and int(hours+minutes+seconds)==0:
         time_str += f"{int(micros)}micros"
     return time_str or "0s"
 
@@ -99,3 +100,18 @@ def convertBytesToHumanReadable(num_bytes):
             return f"{num_bytes:.2f} {unit}"
         num_bytes /= 1024.0
     return f"{num_bytes:.2f} YB"
+
+
+def createDirs(directory_path):
+    # Create the directory along with any necessary parent directories
+    try:
+        os.makedirs(directory_path, exist_ok=True)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
+def remove_extension(file_path):
+    root, _ = os.path.splitext(file_path)
+    if root.endswith(".log"):
+        root, _ = os.path.splitext(root)
+    return root
