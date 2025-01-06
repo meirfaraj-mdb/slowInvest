@@ -7,7 +7,7 @@ from sl_atlas.AtlasApi import AtlasApi
 from sl_report.report import Report
 from sl_async.slorch import extract_slow_queries_from_file
 from sl_config.config import Config
-from sl_plot.graphs import createGraphByNamespace, createGraphByDb
+from sl_plot.graphs import createAndInsertGraphs
 from sl_utils.utils import convertToHumanReadable
 import sys
 import concurrent.futures
@@ -93,11 +93,7 @@ def addToReport(result,prefix,report,config):
         report.add_page()
         return
 
-    # Aggregate the data to ensure unique hour-namespace combinations
-    if config.INSERT_GRAPH_SUMMARY_TO_REPORT:
-        report.subChapter_title("Graphics")
-        createGraphByDb(config, result, prefix, report)
-        createGraphByNamespace(config, result, prefix, report)
+    createAndInsertGraphs(config, prefix, report, result)
 
     # Group by command shape and calculate statistics
     command_shape_stats = result["groupByCommandShape"].get("global",{})

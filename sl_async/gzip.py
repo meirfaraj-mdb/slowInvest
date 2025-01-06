@@ -30,7 +30,7 @@ class BufferedGzipReader(SlSource):
                 try:
                     decompressed_data = decompressor.decompress(chunk)
                 except zlib.error as err:
-                    logging.warning("Decompression error occurred", exc_info=err)
+                    reader_log.warning("Decompression error occurred", exc_info=err)
                     break
                 buffer += decompressed_data  # Add decompressed data to buffer
                 lines = buffer.split(b'\n')  # Split the buffer into lines
@@ -43,7 +43,7 @@ class BufferedGzipReader(SlSource):
                 if remaining_data:
                     buffer += remaining_data
             except zlib.error as err:
-                logging.warning("Final data flush error occurred", exc_info=err)
+                reader_log.warning("Final data flush error occurred", exc_info=err)
             # Process any remaining data in the buffer
             if buffer:
                 await self.line_filter.process(buffer.decode('utf-8'))
@@ -55,9 +55,8 @@ class BufferedGzipReader(SlSource):
             async with async_open(self.path, 'rt') as log_file:
                 async for line in log_file:
                     await self.line_filter.process( line)
-        logging.info(f"read {self.path} complete")
+        reader_log.info(f"read {self.path} complete")
         await self.queue.put(None)
-
 
     async def close(self):
         pass

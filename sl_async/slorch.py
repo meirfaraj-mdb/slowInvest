@@ -18,7 +18,6 @@ decoder = msgspec.json.Decoder()
 
 
 
-
 # Function for extracting from File :
 def extract_slow_queries_from_file(
         log_file_path,
@@ -73,6 +72,8 @@ class AsyncExtractAndAggregate:
                 result["resume"]["dtime"]=datetime.fromisoformat(dtime)
         return result
 
+    def get_dtime(self):
+        return self.result.get("resume",{}).get("dtime",None)
 
     def run(self):
         asyncio.run(self.internal())
@@ -90,10 +91,10 @@ class AsyncExtractAndAggregate:
         logging.info(f"Decode ended for {self.source.get_name()}")
 
     async def bufferAggregate(self):
-        it=0
         start_time = time.time()
         data = []
         dtime = self.result.get("resume",{}).get(None)
+        it= self.result.get("resume",{}).get("id",0)
         future=None
         while True:
             try:
@@ -138,7 +139,8 @@ class AsyncExtractAndAggregate:
             it+=1
             future=self.pool.submit(append_to_parquet,data, self.parquet_file_path_base,dtime,it,self.save_by_chunk,True,self.result,True)
         start_waiting=time.time()
-        future.result()
+        if future:
+            future.result()
         end_time = time.time()
         elapsed_time_ms = (end_time - start_waiting) * 1000
         logging.info(f"waiting for last pool took {convertToHumanReadable("Millis",elapsed_time_ms)}")

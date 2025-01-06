@@ -7,8 +7,11 @@ import pyarrow as pa
 from pyarrow import parquet as pq
 
 from sl_json.json import encoder, DF_COL
-from sl_utils.utils import createDirs, convertToHumanReadable
-import dask.dataframe as dd
+from sl_utils.utils import createDirs
+
+
+#import dask.dataframe as dd
+
 
 def distinct_values(series):
     # Drop NaN values and get unique values as a list
@@ -78,11 +81,11 @@ def groupbyCommandShape(df):
     end = time.time_ns()
     total_algo_stand+=(end-start)
 
-    start = time.time_ns()
-    ddf = dd.from_pandas(df, npartitions=4)
-    agg_result = ddf.groupby('command_shape').agg(**getCommanShapeAggOp()).compute().reset_index()
-    end = time.time_ns()
-    total_algo_dd+=(end-start)
+#    start = time.time_ns()
+#    ddf = dd.from_pandas(df, npartitions=4)
+#    agg_result = ddf.groupby('command_shape').agg(**getCommanShapeAggOp()).compute().reset_index()
+#    end = time.time_ns()
+#    total_algo_dd+=(end-start)
     return result
 
 def makeSureLessThan24H(time):

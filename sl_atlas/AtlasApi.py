@@ -1,11 +1,15 @@
 import concurrent
+from datetime import datetime
 
 import requests
 from requests.auth import HTTPDigestAuth
 
+from sl_async.gzip import BufferedGzipWriter
 from sl_async.slag import append_to_parquet
+from sl_async.slatlas import BufferedSlAtlasSource
+from sl_async.slorch import AsyncExtractAndAggregate
 from sl_json.json import extractSlowQueryInfos
-from sl_utils.utils import remove_extension, convertToHumanReadable
+from sl_utils.utils import remove_extension, convertToHumanReadable,createDirs
 import re
 import time
 import msgspec
@@ -63,62 +67,16 @@ class AtlasApi():
     def retrieveLast24HSlowQueriesFromCluster(self,groupId,processId, output_file_path, chunk_size=50000,save_by_chunk="none"):
         parquet_file_path_base=f"{remove_extension(output_file_path)}/"
         createDirs(parquet_file_path_base)
-        result=init_result(parquet_file_path_base)
-        data = []
-        start_time = time.time()
-        last_count = -1
-        sl_output_file_path = f"{output_file_path}/slow_queries_{groupId}_{processId}.log"
-        it= result["resume"].get("id",0)
-        lastHours = None
-        lastPrint=0
-        dtime = result["resume"].get("dtime",None)
-        with open(sl_output_file_path, 'w', encoding='utf-8') as output_file:
-            while last_count <0 or last_count>=15000 :
-                path=f"/groups/{groupId}/processes/{processId}/performanceAdvisor/slowQueryLogs"
-                arg={}
-                if not (dtime is None):
-                    since=str(int(time.mktime(dtime.timetuple())*1000))
-                    print(f"executing slowQuery {processId} : since : {since}")
-                    arg={"since": since}
-                resp=self.atlas_request('SlowQueries', path, '2023-01-01', arg)
-                last_count=len(resp['slowQueries'])
-                for entry in resp['slowQueries']:
-                    line = entry['line']
-                    try:
-                        log_entry = decoder.decode(line)
-                        if log_entry.get("msg") == "Slow query":
-                            timestamp = log_entry.get("t", {}).get("$date")
-                            if timestamp:
-                                dtime = datetime.fromisoformat(timestamp)
-                                day  = dtime.strftime('%Y%m%d')
-                                dhour = dtime.strftime('%Y-%m-%d_%H')
-                                if lastHours is None :
-                                    lastHours = dhour
-                                if (lastHours != dhour) or len(data) >= chunk_size:
-                                    dumpAggregation=(lastHours != dhour)
-                                    lastHours = dhour
-                                    it+=1
-                                    append_to_parquet(data, parquet_file_path_base,dtime, it,save_by_chunk,dumpAggregation,result)
-                                    data = []  # Clear list to free memory
-                                    if result["countOfSlow"]-lastPrint>0 and result["countOfSlow"]-lastPrint>50000:
-                                        lastPrint=result["countOfSlow"]
-                                        end_time = time.time()
-                                        elapsed_time_ms = (end_time - start_time) * 1000
-                                        print(f"loaded {result["countOfSlow"]} slow queries in {convertToHumanReadable("Millis",elapsed_time_ms)}")
-                                if extractSlowQueryInfos(data, log_entry):
-                                    output_file.write(line)
-                                else:
-                                    result["systemSkipped"]+=1
-                    except msgspec.MsgspecError:
-                        # Skip lines that are not valid JSON
-                        continue
 
-                # Handle any remaining data
-                if data:
-                    it+=1
-                    append_to_parquet(data, parquet_file_path_base,dtime,it,save_by_chunk,True,result,True)
-        print(f"Extracted {result["countOfSlow"]} slow queries have been saved to {output_file_path} and {parquet_file_path_base}")
-        return result
+        src= BufferedSlAtlasSource(self,groupId,processId)
+        sl_output_file_path = f"{output_file_path}/slow_queries_{groupId}_{processId}.log"
+
+        dest= BufferedGzipWriter(sl_output_file_path)
+        orch=AsyncExtractAndAggregate(src,dest,parquet_file_path_base,chunk_size,save_by_chunk  )
+        src.set_dtime(orch.get_dtime())
+        orch.run()
+        return orch.get_results()
+
 
     def listAllProject(self):
         resp=self.atlas_request("GetAllProject",
