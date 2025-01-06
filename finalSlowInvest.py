@@ -42,7 +42,7 @@ def process_row(index, row,report,columns):
     report.sub4Chapter_title(
         f"{convertToHumanReadable('cmdType',row['cmdType'])}"
         f"({convertToHumanReadable('namespace',row['namespace'])}) :"
-        f" Time={convertToHumanReadable('durationMillis',row['durationMillis_total'],True)}, count={row['slow_query_count']}"+
+        f" Time={convertToHumanReadable('durationMillis',row['durationMillis_total'],True)}, count={row['slow_query']}"+
         (f" DISK={convertToHumanReadable('bytesTotalDiskWR',row['storage_data_bytesTotalDiskWR_total'], True)}" if row['storage_data_bytesTotalDiskWR_total']>0 else "")+
         (f" RES={convertToHumanReadable('bytesReslen',row['bytesReslen_total'], True)}" if row['bytesReslen_total']>0 else ""))
 
@@ -72,8 +72,8 @@ def display_queries(reportTitle,report, df):
         # Call report.sub3Chapter_title with the appName
         report.sub3Chapter_title(f"appName: {app_name}")
 
-        # Sort the grouped DataFrame by slow_query_count and average_duration in descending order
-        sorted_grouped_df = app_group.sort_values(by=['durationMillis_total','slow_query_count'], ascending=[False, False])
+        # Sort the grouped DataFrame by slow_query and average_duration in descending order
+        sorted_grouped_df = app_group.sort_values(by=['durationMillis_total','slow_query'], ascending=[False, False])
 
         # Iterate over each row in the sorted grouped DataFrame
         for index, row in sorted_grouped_df.iterrows():

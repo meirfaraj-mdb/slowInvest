@@ -329,12 +329,20 @@ class PDF(FPDF):
                 # Store the value in the appropriate category
                 category = col.rsplit('_', 1)[1]
                 if row.get(col, 0)!=0 :
-                    aggregated_values[base_name][category] = convertToHumanReadable(base_name,row.get(col, 0))
+                    if col.endswith("_count"):
+                        aggregated_values[base_name][category] = convertToHumanReadable(col,row.get(col, 0))
+                    else:
+                        aggregated_values[base_name][category] = convertToHumanReadable(base_name,row.get(col, 0))
 
         # Process unique columns
         for col in columns:
             if not col.endswith(('_min', '_max', '_avg', '_total',"_count")):
                 value = row.get(col, 0)
+                if isinstance(value, list) and len(value) <= 1:
+                    if len(value) == 0:
+                        value=''
+                    else:
+                        value=value[0]
                 if value == 0 or value == '' or value == '0':
                     continue
                 # Add header for the column
@@ -347,7 +355,7 @@ class PDF(FPDF):
         # Add table header and rows
         for base_name, values in aggregated_values.items():
             # Check if all values are zero
-            if len(values)==0 or all(v == 0 for v in values.values()):
+            if len(values)<=1 or all(v == 0 for v in values.values()):
                 continue
             # Add header for the base name
             self.set_font('helvetica', 'B', 9)

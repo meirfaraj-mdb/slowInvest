@@ -40,7 +40,7 @@ class JsonAndText:
         self.log_entry=None
 
 
-DF_COL = ['timestamp','hour', 'db', 'namespace', 'slow_query_count', 'durationMillis','planningTimeMicros', 'has_sort_stage', 'query_targeting',
+DF_COL = ['timestamp','hour', 'db', 'namespace', 'slow_query', 'durationMillis','planningTimeMicros', 'has_sort_stage', 'query_targeting',
           'plan_summary', 'command_shape', 'writeConflicts', 'skip', 'limit', 'appName', 'changestream', 'usedDisk',
           'fromMultiPlanner','replanned','replanReason',
           'keys_examined', 'docs_examined', 'nreturned', 'cursorid', 'nBatches', 'numYields',

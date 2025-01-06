@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -6,13 +7,15 @@ import pyarrow as pa
 from pyarrow import parquet as pq
 
 from sl_json.json import encoder, DF_COL
-from sl_utils.utils import createDirs
-
+from sl_utils.utils import createDirs, convertToHumanReadable
+import dask.dataframe as dd
 
 def distinct_values(series):
     # Drop NaN values and get unique values as a list
     flat_list = [item for sublist in series.dropna() for item in (sublist if isinstance(sublist, list) else [sublist])]
     unique_values = list(set(flat_list))
+    if 0 in unique_values:
+        unique_values.remove(0)
     return unique_values
     # Convert the list of unique values to a string separated by commas
     #return ', '.join(map(str, unique_values))
@@ -33,17 +36,17 @@ def minMaxAvgTtl(column_name):
 def getCommanShapeAggOp():
     # Create a dictionary to hold all aggregation operations
     agg_operations = {
-        'slow_query_count': ('slow_query_count', 'sum'),
-        'has_sort_stage': ('has_sort_stage', lambda x: x.mode().iloc[0] if not x.mode().empty else False),
-        'usedDisk': ('usedDisk', distinct_values),
-        'fromMultiPlanner': ('fromMultiPlanner', distinct_values),
-        'replanned':('replanned', distinct_values),
-        'replanReason':('replanReason', distinct_values),
-        'plan_summary': ('plan_summary', distinct_values),
+        'slow_query': ('slow_query', 'sum'),
         'app_name': ('appName', distinct_values),
         'db': ('db', distinct_values),
         'namespace': ('namespace', distinct_values),
         'cmdType':('cmdType', distinct_values),
+        'has_sort_stage': ('has_sort_stage', lambda x: x.mode().iloc[0] if not x.mode().empty else False),
+        'usedDisk': ('usedDisk', distinct_values),
+        'plan_summary': ('plan_summary', distinct_values),
+        'fromMultiPlanner': ('fromMultiPlanner', distinct_values),
+        'replanned':('replanned', distinct_values),
+        'replanReason':('replanReason', distinct_values),
         'count_of_in':('count_of_in', distinct_values),
         'getMore':('getMore','sum')
     }
@@ -61,10 +64,26 @@ def getCommanShapeAggOp():
         agg_operations.update(minMaxAvgTtl(column))
     return agg_operations
 
-
+total_algo_stand = 0
+total_algo_dd = 0
+# df['command_shape'].astype('category')
+# Use NumPy Operations: If possible, refactor the aggregation to use NumPy operations, which are generally faster as they are implemented in C.
+#
 def groupbyCommandShape(df):
-    return df.groupby('command_shape').agg(**getCommanShapeAggOp()).reset_index()
+    global total_algo_stand
+    global total_algo_dd
+    #return df.groupby('command_shape').agg(**getCommanShapeAggOp()).reset_index()
+    start = time.time_ns()
+    result = df.groupby('command_shape').agg(**getCommanShapeAggOp()).reset_index()
+    end = time.time_ns()
+    total_algo_stand+=(end-start)
 
+    start = time.time_ns()
+    ddf = dd.from_pandas(df, npartitions=4)
+    agg_result = ddf.groupby('command_shape').agg(**getCommanShapeAggOp()).compute().reset_index()
+    end = time.time_ns()
+    total_algo_dd+=(end-start)
+    return result
 
 def makeSureLessThan24H(time):
     """
@@ -144,7 +163,7 @@ def concat_command_shape_agg(df1,df2):
             if operation == 'sum':
                 final_agg[key] = group[key].sum()
             elif operation == 'count':
-                final_agg[key] = group[key].count()  # Changed to correct count logic
+                final_agg[key] = group[key].sum()
             elif operation == 'mean':
                 sum_column = f"{column}_total"
                 count_column = f"{column}_count"
@@ -177,6 +196,12 @@ def append_to_parquet(data, file_path_base,dtime,id,save_by_chunk,dumpAggregatio
     if saveAll:
         result["resume"]["id"]=id
         result["resume"]["dtime"]=dtime.isoformat()
+        winner = "dask"
+        if total_algo_stand < total_algo_dd :
+            winner = "stand"
+        elif total_algo_stand == total_algo_dd:
+            winner = "none"
+        logging.info(f"winner={winner} stand={total_algo_stand}ns and dd={total_algo_dd}ns")
         with open(f"{file_path_base}resume.json", "w") as out_file:
             encoder.encode(result["resume"])
     file_path_base=f"{file_path_base}{day}/"

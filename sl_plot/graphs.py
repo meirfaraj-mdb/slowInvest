@@ -64,7 +64,7 @@ def aggregateForGraph(df,groupByConditions):
         if cond != 'hour':
             df[cond] = df[cond].apply(lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x)
     return df.groupby(groupByConditions).agg(
-        slow_query_count=('slow_query_count', 'sum'),
+        slow_query=('slow_query', 'sum'),
         total_duration=('durationMillis_total', 'sum'),
         writeConflicts=('writeConflicts_total', 'sum'),
         has_sort_stage=('has_sort_stage', 'sum'),
@@ -85,7 +85,7 @@ def createGraphBy(config, result, groupByCondition, prefix, report):
       report.add_page()
       report.sub2Chapter_title(f"Number of Slow Queries per Hour per {groupByCondition}")
       file_name = f"{prefix}_slow_queries_per_hour_and_{groupByCondition}.png"
-      plot_stats(config, df, 'slow_query_count', f"Number of Slow Queries per Hour per {groupByCondition}",
+      plot_stats(config, df, 'slow_query', f"Number of Slow Queries per Hour per {groupByCondition}",
                    'Number of Slow Queries',
                    output_file=file_name, report=report,columns=[groupByCondition])
 
@@ -102,7 +102,7 @@ def createGraphBy(config, result, groupByCondition, prefix, report):
       report.add_page()
       file_name = f"{prefix}_COLLSCAN_per_hour_and_{groupByCondition}.png"
       plot_stats(config, df_plan_summary[df_plan_summary['plan_summary'].str.contains('COLLSCAN')],
-                   'slow_query_count', f"COLLSCAN Count per Hour per {groupByCondition}", 'COLLSCAN Count',
+                   'slow_query', f"COLLSCAN Count per Hour per {groupByCondition}", 'COLLSCAN Count',
                    output_file=file_name, columns=[groupByCondition, 'plan_summary'], report=report)
 
       # Plot hasSortStage count per hour per groupByCondition

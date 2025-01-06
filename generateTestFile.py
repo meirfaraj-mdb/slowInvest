@@ -1,6 +1,6 @@
 import os
 import sys
-from config import Config
+from sl_config.config import Config
 
 def get_file_size(filepath):
     """Returns the file size in bytes."""

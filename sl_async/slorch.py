@@ -32,7 +32,7 @@ def extract_slow_queries_from_file(
     dest= BufferedGzipWriter(output_file_path)
     orch=AsyncExtractAndAggregate(src,dest,parquet_file_path_base,chunk_size,save_by_chunk  )
     orch.run()
-
+    return orch.get_results()
 
 class AsyncExtractAndAggregate:
     def __init__(self,
@@ -160,3 +160,6 @@ class AsyncExtractAndAggregate:
             await asyncio.gather(self.source_task,self.consumer_task,self.aggreg_task,self.dest.get_task())
         #await self.queue.join()
         #await self.queue.put(None)  # Signal the consumer to stop
+
+    def get_results(self):
+        return self.result

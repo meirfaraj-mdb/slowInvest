@@ -27,7 +27,7 @@ class Config():
         if configName:
             self.config = load_config(f"config/{configName}.json")
         else:
-            self.config = load_config(f"../config/config.json")
+            self.config = load_config(f"config/config.json")
         # Atlas / files / OpsManager
         self.RETRIEVAL_MODE = self.config.get('RETRIEVAL_MODE', 'files')
         # Atlas/Ops Manager related

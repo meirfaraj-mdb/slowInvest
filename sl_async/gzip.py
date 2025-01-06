@@ -52,7 +52,7 @@ class BufferedGzipReader(SlSource):
         if self.path.endswith('.gz'):
             await self.async_read_gzip_lines()
         else:
-            async with async_open(self.path, 'rt', buffering=8 * io.DEFAULT_BUFFER_SIZE) as log_file:
+            async with async_open(self.path, 'rt') as log_file:
                 async for line in log_file:
                     await self.line_filter.process( line)
         logging.info(f"read {self.path} complete")

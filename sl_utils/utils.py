@@ -66,6 +66,8 @@ def convertTimeToHumanReadable(name, val, rounded=False):
     return time_str or "0s"
 
 def convertToHumanReadable(name, val, rounded=False):
+    if name.endswith('_count'):
+        return str(val)
     if name.endswith('Millis') or name.endswith('Micros'):
         return str(convertTimeToHumanReadable(name, val, rounded))
 
