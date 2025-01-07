@@ -8,8 +8,9 @@ decoder = msgspec.json.Decoder()
 
 
 class JsonAndText:
-    def __init__(self,line):
+    def __init__(self,line,source):
         self.orig=line
+        self.source=source
         self.dtime=None
         self.dhour = None
         self.log_entry=None
@@ -23,7 +24,7 @@ class JsonAndText:
             if timestamp:
                 self.dtime = datetime.fromisoformat(timestamp)
                 self.dhour = self.dtime.strftime('%Y-%m-%d_%H')
-                self.log_entry=extractSlowQueryInfos(self.log_entry)
+                self.log_entry=extractSlowQueryInfos(self.log_entry,self.source)
                 return
         self.clear()
 
@@ -38,10 +39,11 @@ class JsonAndText:
         self.dtime=None
         self.dhour = None
         self.log_entry=None
+        self.source=None
 
 
-DF_COL = ['timestamp','hour', 'db', 'namespace', 'slow_query', 'durationMillis','planningTimeMicros', 'has_sort_stage', 'query_targeting',
-          'plan_summary', 'command_shape', 'writeConflicts', 'skip', 'limit', 'appName', 'changestream', 'usedDisk',
+DF_COL = ['timestamp','hour','source', 'db', 'namespace', 'slow_query', 'workingMillis','durationMillis','cpuNanos','planningTimeMicros', 'has_sort_stage', 'query_targeting',
+          'plan_summary', 'command_shape', 'writeConflicts', 'skip', 'limit', 'appName','readPreference', 'changestream', 'usedDisk',
           'fromMultiPlanner','replanned','replanReason',
           'keys_examined', 'docs_examined', 'nreturned', 'cursorid', 'nBatches', 'numYields',
           'totalOplogSlotDurationMicros', 'waitForWriteConcernDurationMillis', 'ninserted', 'nMatched', 'nModified',
@@ -52,7 +54,7 @@ DF_COL = ['timestamp','hour', 'db', 'namespace', 'slow_query', 'durationMillis',
           'cmdType','count_of_in','max_count_in','sum_of_counts_in','getMore']
 
 
-def extractSlowQueryInfos(log_entry):
+def extractSlowQueryInfos(log_entry,source):
     start_time = time.time()
     # Extract relevant fields
     getMore=0
@@ -143,10 +145,15 @@ def extractSlowQueryInfos(log_entry):
     #
 
     writeConflicts = attr.get("writeConflicts", 0)
+    workingMillis = attr.get("workingMillis",0)
+    cpuNanos = attr.get("cpuNanos",0)
     command = attr.get("command", {})
+    readPreference=command.get("$readPreference",{}).get("mode",'')
+
     skip = command.get("skip", 0)
     limit = command.get("limit", 0)
     changestream = check_change_stream(log_entry)
+
     #command.get("readConcern",None)
     #readConcern:
     #{
@@ -258,8 +265,8 @@ def extractSlowQueryInfos(log_entry):
 
     if timestamp:
         hour = datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:00:00')
-        return [timestamp,hour, db, namespace, 1, duration,planningTimeMicros, has_sort_stage, query_targeting, plan_summary,
-                     command_shape,writeConflicts,skip,limit,appName,changestream,usedDisk,fromMultiPlanner,replanned,replanReason,keys_examined,docs_examined,nreturned,
+        return [timestamp,hour, source,db, namespace, 1, workingMillis,duration,cpuNanos,planningTimeMicros, has_sort_stage, query_targeting, plan_summary,
+                     command_shape,writeConflicts,skip,limit,appName,readPreference,changestream,usedDisk,fromMultiPlanner,replanned,replanReason,keys_examined,docs_examined,nreturned,
                      cursorid,nBatches,numYields,totalOplogSlotDurationMicros,waitForWriteConcernDurationMillis,ninserted,
                      nMatched,nModified,nUpserted,ndeleted,keysInserted,keysDeleted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,
                      storage_data_bytesRead,storage_data_timeReadingMicros,storage_data_bytesWritten,storage_data_timeWritingMicros,storage_data_bytesTotalDiskWR,storage_data_timeWRMicros,

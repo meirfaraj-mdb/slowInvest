@@ -42,8 +42,10 @@ def getCommanShapeAggOp():
         'slow_query': ('slow_query', 'sum'),
         'app_name': ('appName', distinct_values),
         'db': ('db', distinct_values),
+        'source':('source', distinct_values),
         'namespace': ('namespace', distinct_values),
         'cmdType':('cmdType', distinct_values),
+        'readPreference':('readPreference', distinct_values),
         'has_sort_stage': ('has_sort_stage', lambda x: x.mode().iloc[0] if not x.mode().empty else False),
         'usedDisk': ('usedDisk', distinct_values),
         'plan_summary': ('plan_summary', distinct_values),
@@ -56,7 +58,7 @@ def getCommanShapeAggOp():
 
     # Add min, max, avg, total for each specified column
 
-    for column in ['writeConflicts','durationMillis','planningTimeMicros', 'keys_examined', 'docs_examined', 'nreturned', 'query_targeting',
+    for column in ['writeConflicts','workingMillis','durationMillis','cpuNanos','planningTimeMicros', 'keys_examined', 'docs_examined', 'nreturned', 'query_targeting',
                    'nBatches', 'numYields','skip','limit', 'waitForWriteConcernDurationMillis','totalOplogSlotDurationMicros',
                    'ninserted', 'nMatched', 'nModified','nUpserted','ndeleted',
                    'keysInserted','keysDeleted','bytesReslen','flowControl_acquireCount','flowControl_timeAcquiringMicros',

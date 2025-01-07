@@ -11,8 +11,20 @@ def convertTimeToHumanReadable(name, val, rounded=False):
     Returns:
     - str, the converted time in a human-readable format.
     """
-    if name.endswith('Micros'):
-        # Convert microseconds to a detailed time format
+    nanos=0
+    if name.endswith('Nanos'):
+        nanos = val % 1_000
+        val //= 1_000
+        micros = val % 1_000
+        val //= 1_000
+        millis = val % 1_000
+        val //= 1_000
+        seconds = val % 60
+        val //= 60
+        minutes = val % 60
+        val //= 60
+        hours = val
+    elif name.endswith('Micros'):
         micros = val % 1_000
         val //= 1_000
         millis = val % 1_000
@@ -35,22 +47,25 @@ def convertTimeToHumanReadable(name, val, rounded=False):
     else:
         return f"{val} (unknown unit)"
     if rounded:
-        # Round microseconds to milliseconds if there are milliseconds or larger units
-        if micros >= 500 and (millis > 0 or seconds > 0 or minutes > 0 or hours > 0):
-            millis += 1
-        micros = 0
-        # Round milliseconds to seconds if there are seconds or larger units
-        if millis >= 500 and (seconds > 0 or minutes > 0 or hours > 0):
-            seconds += 1
-        millis = 0
-        # Round seconds to minutes if there are minutes or larger units
-        if seconds >= 30 and (minutes > 0 or hours > 0):
-            minutes += 1
-        seconds = 0
-        # Convert 60 minutes to 1 hour
-        if minutes >= 60:
-            hours += minutes // 60
-            minutes = minutes % 60
+        if micros >0 or millis > 0 or seconds > 0 or minutes > 0 or hours > 0:
+            if nanos >= 500:
+                micros +=1
+            nanos = 0
+            if millis > 0 or seconds > 0 or minutes > 0 or hours > 0:
+                if micros >= 500:
+                    millis += 1
+                micros = 0
+            if seconds > 0 or minutes > 0 or hours > 0:
+                if millis >= 500:
+                    seconds += 1
+                millis = 0
+                if minutes > 0 or hours > 0:
+                    if seconds >= 30:
+                        minutes += 1
+                    seconds = 0
+                    if minutes >= 60:
+                       hours += minutes // 60
+                       minutes = minutes % 60
     # Construct the human-readable time string
     time_str = ""
     if hours > 0:
@@ -63,12 +78,14 @@ def convertTimeToHumanReadable(name, val, rounded=False):
         time_str += f"{int(millis)}ms"
     if micros > 0 and int(hours+minutes+seconds)==0:
         time_str += f"{int(micros)}micros"
+    if nanos > 0 and int(hours+minutes+seconds+millis)==0:
+        time_str += f"{int(nanos)}ns"
     return time_str or "0s"
 
 def convertToHumanReadable(name, val, rounded=False):
     if name.endswith('_count'):
         return str(val)
-    if name.endswith('Millis') or name.endswith('Micros'):
+    if name.endswith(('Millis','Micros','Nanos')):
         return str(convertTimeToHumanReadable(name, val, rounded))
 
     # Check if the name contains 'bytes' and convert to human-readable size

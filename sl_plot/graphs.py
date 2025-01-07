@@ -1,7 +1,9 @@
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 from matplotlib import pyplot as plt
 import matplotlib
+import logging
+graph_logging = logging.getLogger("graphs")
 
 def plot_stats(config, df, value_col, title, ylabel, xlabel='Time', output_file=None, columns=['namespace']):
 
@@ -42,12 +44,12 @@ def plot_stats(config, df, value_col, title, ylabel, xlabel='Time', output_file=
         if config.GENERATE_PNG:
             png_file_path = f"{output_file}.png"
             plt.savefig(png_file_path, bbox_inches='tight')
-            print(f"Graph saved to {png_file_path}")
+            graph_logging.info(f"Graph saved to {png_file_path}")
             file_paths.append(png_file_path)
 
         svg_file_path = f"{output_file}.svg"
         plt.savefig(svg_file_path, format="svg")
-        print(f"Graph saved to {svg_file_path}")
+        graph_logging.info(f"Graph saved to {svg_file_path}")
         file_paths.append(svg_file_path)
 
     plt.close(fig)
@@ -57,9 +59,9 @@ def plot_stats(config, df, value_col, title, ylabel, xlabel='Time', output_file=
 def parallel_plot_tasks(plot_args_list):
     """Run multiple plot tasks in parallel and collect their results."""
     results = []
-    with ProcessPoolExecutor() as executor:
+    with ThreadPoolExecutor() as executor:
         future_to_args = {executor.submit(plot_stats, *args): args for args in plot_args_list}
-        for future in as_completed(future_to_args):
+        for future in future_to_args:
             try:
                 result = future.result()
                 results.append((future_to_args[future], result))

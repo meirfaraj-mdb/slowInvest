@@ -1,18 +1,14 @@
 import concurrent
-from datetime import datetime
+import re
 
+import msgspec
 import requests
 from requests.auth import HTTPDigestAuth
 
 from sl_async.gzip import BufferedGzipWriter
-from sl_async.slag import append_to_parquet
 from sl_async.slatlas import BufferedSlAtlasSource
 from sl_async.slorch import AsyncExtractAndAggregate
-from sl_json.json import extractSlowQueryInfos
-from sl_utils.utils import remove_extension, convertToHumanReadable,createDirs
-import re
-import time
-import msgspec
+from sl_utils.utils import remove_extension, createDirs
 
 decoder = msgspec.json.Decoder()
 def convert_list_to_dict(databases):
@@ -72,7 +68,7 @@ class AtlasApi():
         sl_output_file_path = f"{output_file_path}/slow_queries_{groupId}_{processId}.log"
 
         dest= BufferedGzipWriter(sl_output_file_path)
-        orch=AsyncExtractAndAggregate(src,dest,parquet_file_path_base,chunk_size,save_by_chunk  )
+        orch=AsyncExtractAndAggregate(processId,src,dest,parquet_file_path_base,chunk_size,save_by_chunk  )
         src.set_dtime(orch.get_dtime())
         orch.run()
         return orch.get_results()

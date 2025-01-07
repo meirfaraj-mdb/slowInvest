@@ -26,15 +26,19 @@ def extract_slow_queries_from_file(
         save_by_chunk="none",
         display_at=200000):
     parquet_file_path_base=f"{remove_extension(output_file_path)}/"
+
+    file_name = os.path.basename(log_file_path)
+    file_name_without_extension = os.path.splitext(file_name)[0]
     createDirs(parquet_file_path_base)
     src= BufferedGzipReader(log_file_path)
     dest= BufferedGzipWriter(output_file_path)
-    orch=AsyncExtractAndAggregate(src,dest,parquet_file_path_base,chunk_size,save_by_chunk  )
+    orch=AsyncExtractAndAggregate(file_name_without_extension,src,dest,parquet_file_path_base,chunk_size,save_by_chunk  )
     orch.run()
     return orch.get_results()
 
 class AsyncExtractAndAggregate:
     def __init__(self,
+                 sourceName,
                  source,
                  dest=None,
                  parquet_file_path_base=None,
@@ -43,6 +47,7 @@ class AsyncExtractAndAggregate:
                  display_at=200000,
                  line_buffer_size=500
                  ):
+        self.sourceName=sourceName
         self.source=source
         self.dest=dest
         self.queue_decoded = asyncio.Queue(3*line_buffer_size)
@@ -86,7 +91,7 @@ class AsyncExtractAndAggregate:
                 self.queue_source.task_done()
                 break
             # logging.info(f"added {item}")
-            await self.queue_decoded.put(JsonAndText(item))
+            await self.queue_decoded.put(JsonAndText(item,self.sourceName))
             self.queue_source.task_done()
         logging.info(f"Decode ended for {self.source.get_name()}")
 

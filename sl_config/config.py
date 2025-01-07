@@ -4,8 +4,10 @@ import matplotlib
 import msgspec
 import logging
 
+from sl_utils.utils import createDirs
+
 decoder = msgspec.json.Decoder()
-logging.basicConfig(level=logging.DEBUG)
+#logging.basicConfig(level=logging.DEBUG)
 
 # Load configuration from a JSON file
 def load_config(file_path):
@@ -13,13 +15,6 @@ def load_config(file_path):
     with open(file_path, 'r') as config_file:
         config = decoder.decode(config_file.read())
     return config
-
-def createDirs(directory_path):
-    # Create the directory along with any necessary parent directories
-    try:
-        os.makedirs(directory_path, exist_ok=True)
-    except Exception as e:
-        print(f"An error occurred: {e}")
 
 class Config():
     def __init__(self, configName):

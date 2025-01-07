@@ -191,55 +191,55 @@ def generate_cluster_report(atlasApi, cluster, config, report):
         report = Report(config)
         report.add_page()
     processesShard = cluster.get("processes", {})
-    pool = concurrent.futures.ThreadPoolExecutor(max_workers=min(len(processesShard)*4+3,20))
-    results={}
-    for shard_num, processes in processesShard.items():
-        if shard_num == "config":
-            path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{processes.get("typeName")}/{processes.get("hostname")}/"
-            results[processes.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, processes.get("id", ""),path,config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
-            continue
-        primary = processes.get("primary", {})
-        #atlasApi.get_database_composition_for_process(cluster, primary)
-        path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{primary.get("typeName")}/{primary.get("hostname")}/"
-        results[primary.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, primary.get("id", ""),
-                                                           path,
-                                                           config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
-        #atlasApi.get_database_composition_sizing_for_process(cluster, primary)
-
-        others = processes.get("others", {})
-        for proc in others:
-            path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{proc.get("typeName")}/{proc.get("hostname")}/"
-            results[proc.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, proc.get("id", ""),
+    with concurrent.futures.ProcessPoolExecutor() as pool:
+        results={}
+        for shard_num, processes in processesShard.items():
+            if shard_num == "config":
+                path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{processes.get("typeName")}/{processes.get("hostname")}/"
+                results[processes.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, processes.get("id", ""),path,config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
+                continue
+            primary = processes.get("primary", {})
+            #atlasApi.get_database_composition_for_process(cluster, primary)
+            path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{primary.get("typeName")}/{primary.get("hostname")}/"
+            results[primary.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, primary.get("id", ""),
                                                                path,
                                                                config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
+            #atlasApi.get_database_composition_sizing_for_process(cluster, primary)
 
-    pool.shutdown(wait=True)
-    display_cluster(config, report, cluster)
+            others = processes.get("others", {})
+            for proc in others:
+                path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{proc.get("typeName")}/{proc.get("hostname")}/"
+                results[proc.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, proc.get("id", ""),
+                                                                   path,
+                                                                   config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
 
-    for shard_num, processes in processesShard.items():
-        if shard_num == "config":
+        #pool.shutdown(wait=True)
+        display_cluster(config, report, cluster)
+
+        for shard_num, processes in processesShard.items():
+            if shard_num == "config":
+                addToReport(
+                    results[processes.get("id","")].result(),
+                    f"{config.OUTPUT_FILE_PATH}/{shard_num}_{processes.get("id", "")}_{processes.get("typeName", "")}",
+                    report,
+                    config)
+                continue
+            primary = processes.get("primary", {})
+            #atlasApi.get_database_composition_for_process(cluster, primary)
             addToReport(
-                results[processes.get("id","")].result(),
-                f"{config.OUTPUT_FILE_PATH}/{shard_num}_{processes.get("id", "")}_{processes.get("typeName", "")}",
+                results[primary.get("id", "")].result(),
+                f"{config.OUTPUT_FILE_PATH}/{shard_num}_{primary.get("id", "")}_{primary.get("typeName", "")}",
                 report,
                 config)
-            continue
-        primary = processes.get("primary", {})
-        #atlasApi.get_database_composition_for_process(cluster, primary)
-        addToReport(
-            results[primary.get("id", "")].result(),
-            f"{config.OUTPUT_FILE_PATH}/{shard_num}_{primary.get("id", "")}_{primary.get("typeName", "")}",
-            report,
-            config)
-        atlasApi.get_database_composition_sizing_for_process(cluster, primary)
+            atlasApi.get_database_composition_sizing_for_process(cluster, primary)
 
-        others = processes.get("others", {})
-        for proc in others:
-            addToReport(
-                results[proc.get("id", "")].result(),
-                f"{config.OUTPUT_FILE_PATH}/{shard_num}_{proc.get("id", "")}_{proc.get("typeName", "")}",
-                report,
-                config)
+            others = processes.get("others", {})
+            for proc in others:
+                addToReport(
+                    results[proc.get("id", "")].result(),
+                    f"{config.OUTPUT_FILE_PATH}/{shard_num}_{proc.get("id", "")}_{proc.get("typeName", "")}",
+                    report,
+                    config)
     if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
         report.write(f"{config.REPORT_FILE_PATH}/slow_report{cluster.get("name")}")
 
