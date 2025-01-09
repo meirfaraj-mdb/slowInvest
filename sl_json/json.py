@@ -8,9 +8,10 @@ decoder = msgspec.json.Decoder()
 
 
 class JsonAndText:
-    def __init__(self,line,source):
+    def __init__(self,line,source,shard):
         self.orig=line
         self.source=source
+        self.shard=shard
         self.dtime=None
         self.dhour = None
         self.log_entry=None
@@ -24,7 +25,7 @@ class JsonAndText:
             if timestamp:
                 self.dtime = datetime.fromisoformat(timestamp)
                 self.dhour = self.dtime.strftime('%Y-%m-%d_%H')
-                self.log_entry=extractSlowQueryInfos(self.log_entry,self.source)
+                self.log_entry=extractSlowQueryInfos(self.log_entry,self.source,self.shard)
                 return
         self.clear()
 
@@ -40,9 +41,10 @@ class JsonAndText:
         self.dhour = None
         self.log_entry=None
         self.source=None
+        self.shard=None
 
 
-DF_COL = ['timestamp','hour','source', 'db', 'namespace', 'slow_query', 'workingMillis','durationMillis','cpuNanos','planningTimeMicros', 'has_sort_stage', 'query_targeting',
+DF_COL = ['timestamp','hour','source','shard', 'db', 'namespace', 'slow_query', 'workingMillis','durationMillis','cpuNanos','planningTimeMicros', 'has_sort_stage', 'query_targeting',
           'plan_summary', 'command_shape', 'writeConflicts', 'skip', 'limit', 'appName','readPreference', 'changestream', 'usedDisk',
           'fromMultiPlanner','replanned','replanReason',
           'keys_examined', 'docs_examined', 'nreturned', 'cursorid', 'nBatches', 'numYields',
@@ -54,7 +56,7 @@ DF_COL = ['timestamp','hour','source', 'db', 'namespace', 'slow_query', 'working
           'cmdType','count_of_in','max_count_in','sum_of_counts_in','getMore']
 
 
-def extractSlowQueryInfos(log_entry,source):
+def extractSlowQueryInfos(log_entry,source,shard):
     start_time = time.time()
     # Extract relevant fields
     getMore=0
@@ -265,7 +267,7 @@ def extractSlowQueryInfos(log_entry,source):
 
     if timestamp:
         hour = datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:00:00')
-        return [timestamp,hour, source,db, namespace, 1, workingMillis,duration,cpuNanos,planningTimeMicros, has_sort_stage, query_targeting, plan_summary,
+        return [timestamp,hour, source,shard,db, namespace, 1, workingMillis,duration,cpuNanos,planningTimeMicros, has_sort_stage, query_targeting, plan_summary,
                      command_shape,writeConflicts,skip,limit,appName,readPreference,changestream,usedDisk,fromMultiPlanner,replanned,replanReason,keys_examined,docs_examined,nreturned,
                      cursorid,nBatches,numYields,totalOplogSlotDurationMicros,waitForWriteConcernDurationMillis,ninserted,
                      nMatched,nModified,nUpserted,ndeleted,keysInserted,keysDeleted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,

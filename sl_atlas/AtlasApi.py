@@ -60,7 +60,7 @@ class AtlasApi():
             raise
 
     # retrieve slow queries
-    def retrieveLast24HSlowQueriesFromCluster(self,groupId,processId, output_file_path, chunk_size=50000,save_by_chunk="none"):
+    def retrieveLast24HSlowQueriesFromCluster(self,groupId,processId,shard, output_file_path, chunk_size=50000,save_by_chunk="none"):
         parquet_file_path_base=f"{remove_extension(output_file_path)}/"
         createDirs(parquet_file_path_base)
 
@@ -68,7 +68,7 @@ class AtlasApi():
         sl_output_file_path = f"{output_file_path}/slow_queries_{groupId}_{processId}.log"
 
         dest= BufferedGzipWriter(sl_output_file_path)
-        orch=AsyncExtractAndAggregate(processId,src,dest,parquet_file_path_base,chunk_size,save_by_chunk  )
+        orch=AsyncExtractAndAggregate(processId,shard,src,dest,parquet_file_path_base,chunk_size,save_by_chunk  )
         src.set_dtime(orch.get_dtime())
         orch.run()
         return orch.get_results()

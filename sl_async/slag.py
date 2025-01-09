@@ -43,6 +43,7 @@ def getCommanShapeAggOp():
         'app_name': ('appName', distinct_values),
         'db': ('db', distinct_values),
         'source':('source', distinct_values),
+        'shard': ('shard', distinct_values),
         'namespace': ('namespace', distinct_values),
         'cmdType':('cmdType', distinct_values),
         'readPreference':('readPreference', distinct_values),

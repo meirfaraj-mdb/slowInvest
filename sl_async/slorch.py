@@ -32,13 +32,14 @@ def extract_slow_queries_from_file(
     createDirs(parquet_file_path_base)
     src= BufferedGzipReader(log_file_path)
     dest= BufferedGzipWriter(output_file_path)
-    orch=AsyncExtractAndAggregate(file_name_without_extension,src,dest,parquet_file_path_base,chunk_size,save_by_chunk  )
+    orch=AsyncExtractAndAggregate(file_name_without_extension,0,src,dest,parquet_file_path_base,chunk_size,save_by_chunk  )
     orch.run()
     return orch.get_results()
 
 class AsyncExtractAndAggregate:
     def __init__(self,
                  sourceName,
+                 shard,
                  source,
                  dest=None,
                  parquet_file_path_base=None,
@@ -49,6 +50,7 @@ class AsyncExtractAndAggregate:
                  ):
         self.sourceName=sourceName
         self.source=source
+        self.shard=shard
         self.dest=dest
         self.queue_decoded = asyncio.Queue(3*line_buffer_size)
         self.queue_source=self.source.get_queue()
@@ -91,7 +93,7 @@ class AsyncExtractAndAggregate:
                 self.queue_source.task_done()
                 break
             # logging.info(f"added {item}")
-            await self.queue_decoded.put(JsonAndText(item,self.sourceName))
+            await self.queue_decoded.put(JsonAndText(item,self.sourceName,self.shard))
             self.queue_source.task_done()
         logging.info(f"Decode ended for {self.source.get_name()}")
 
