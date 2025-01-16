@@ -189,7 +189,7 @@ def createAndInsertGraphs(config, prefix, report, result):
               report.chapter_body(f"No {args[3]} to present as graph")
 
         if report:
-            report.add_page()
+            report.addpage()
             report.sub2Chapter_title(args[3])
             report.add_image(file_paths[0])
 

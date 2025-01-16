@@ -68,9 +68,13 @@ These configurations determine the behavior and functionality of the data retrie
 - **`LOGS_FILENAME`**: List of log file names to process. Default is `['mongodb.log']`.
 - **`GENERATE_ONE_PDF_PER_CLUSTER_FILE`**: Boolean indicating whether to generate a separate PDF report for each cluster file. Default is `True`.
 - **`GENERATE_SLOW_QUERY_LOG`**: Boolean indicating whether to generate a slow query log. Default is `True`.
-- **`GENERATE_PDF_REPORT`**: Boolean indicating whether to generate a PDF report. Default is `True`.
 - **`GENERATE_MD`**: Boolean indicating whether to generate a Markdown report. Default is `False`.
 - **`GENERATE_PNG`**: Boolean indicating whether to generate PNG images. Default is `False`.
+
+##### Reporting
+- **`reports.formats`** list of formats to generate. Default is `[pdf]`
+  Available formats : pdf,md
+- `pdf`**: generate a PDF report.
 
 #### Cleanup Options
 

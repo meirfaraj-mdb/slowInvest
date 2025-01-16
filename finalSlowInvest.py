@@ -38,7 +38,7 @@ def save_markdown(df,fileName,comment):
 # display slow query
 def process_row(index, row,report,columns):
     # Define a function to apply to each row
-    report.add_page()
+    report.addpage()
     report.sub4Chapter_title(
         f"{convertToHumanReadable('cmdType',row['cmdType'])}"
         f"({convertToHumanReadable('namespace',row['namespace'])}) :"
@@ -48,7 +48,7 @@ def process_row(index, row,report,columns):
 
 
     report.add_json(row['command_shape'])
-    report.add_page()
+    report.addpage()
     report.table(row.drop(columns=['command_shape']), [col for col in columns if col != 'command_shape'])
 
 
@@ -56,7 +56,7 @@ def process_row(index, row,report,columns):
 def display_queries(reportTitle,report, df):
     if df is None or df.empty :
         return
-    report.add_page()
+    report.addpage()
     report.sub2Chapter_title(reportTitle)
     df = df.copy()
     # Ensure the column used for grouping contains hashable types
@@ -90,7 +90,7 @@ def addToReport(result,prefix,report,config):
     report.chapter_body(f"Instance : {prefix}")
     if result.get("countOfSlow",0) == 0:
         report.chapter_body("No slow query!")
-        report.add_page()
+        report.addpage()
         return
 
     createAndInsertGraphs(config, prefix, report, result)
@@ -198,8 +198,8 @@ def remove_status_suffix(text):
 
 def generate_cluster_report(atlasApi, cluster, config, report):
     if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
-        report = Report(config)
-        report.add_page()
+        report = Report(config.get_report_formats())
+        report.addpage()
     processesShard = cluster.get("processes", {})
     with concurrent.futures.ProcessPoolExecutor() as pool:
         results={}
@@ -257,8 +257,8 @@ def generate_cluster_report(atlasApi, cluster, config, report):
 def file_retrieval_mode(config,report):
     for file in config.LOGS_FILENAME:
         if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
-            report = Report(config)
-            report.add_page()
+            report = Report(config.get_report_formats())
+            report.addpage()
         addToReport(extract_slow_queries_from_file(f"{config.INPUT_PATH}/{file}", f"{config.OUTPUT_FILE_PATH}/slow_queries_{file}",
                                          config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK),
                     f"{config.OUTPUT_FILE_PATH}/{file}",
@@ -276,8 +276,8 @@ if __name__ == "__main__":
     first_option = sys.argv[1] if len(sys.argv) > 1 else None
     # Use the first_option in your Config class or elsewhere
     config = Config(first_option)
-    report = Report(config)
-    report.add_page()
+    report = Report(config.get_report_formats())
+    report.addpage()
 
     if config.RETRIEVAL_MODE == "Atlas":
         atlas_retrieval_mode(config,report)

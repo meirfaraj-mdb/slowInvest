@@ -17,7 +17,10 @@ def load_config(file_path):
     return config
 
 class Config():
+
     def __init__(self, configName):
+        self.default = load_config(f"config/default/default.json")
+
         # Load the configuration
         if configName:
             self.config = load_config(f"config/{configName}.json")
@@ -47,7 +50,6 @@ class Config():
         self.LOGS_FILENAME = self.config.get('LOGS_FILENAME',['mongodb.log']) # was LOG_FILE_PATH
         self.GENERATE_ONE_PDF_PER_CLUSTER_FILE = self.config.get('GENERATE_ONE_PDF_PER_CLUSTER_FILE',True)
         self.GENERATE_SLOW_QUERY_LOG = self.config.get('GENERATE_SLOW_QUERY_LOG',True)
-        self.GENERATE_PDF_REPORT = self.config.get('GENERATE_PDF_REPORT',True)
         self.GENERATE_MD = self.config.get('GENERATE_MD',False)
         self.GENERATE_PNG = self.config.get('GENERATE_PNG',False)
         self.DELETE_IMAGE_AFTER_USED = self.config.get('DELETE_IMAGE_AFTER_USED',False)
@@ -65,7 +67,6 @@ class Config():
             self.GENERATE_INFRA_REPORT=False
             self.GENERATE_PNG =False
             self.INSERT_GRAPH_SUMMARY_TO_REPORT=False
-            self.GENERATE_PDF_REPORT=False
 
         if self.GENERATE_PNG:
             matplotlib.use("cairo")
@@ -86,3 +87,9 @@ class Config():
         gen1*=5
         #gen2*=2
         gc.set_threshold(allocs,gen1,gen2)
+
+    def get_report_formats(self):
+        if self.GENERATE_ORIG_FILE_ONLY:
+           return []
+        return self.config.get("reports",
+                           self.default.get("reports",{})).get("formats",["pdf"])

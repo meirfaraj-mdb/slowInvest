@@ -1,5 +1,7 @@
 from fpdf import *
 from fpdf.enums import XPos,YPos
+
+from sl_report.report import AbstractReport
 from sl_utils.utils import *
 import concurrent
 import msgspec
@@ -28,7 +30,7 @@ def render_toc(pdf, outline):
 
 
 
-class PDF(FPDF):
+class PDFReport(FPDF,AbstractReport):
     def __init__(self, header_txt):
         super().__init__(orientation='P',unit='mm',format='A4')
         self.isCover = False
@@ -438,5 +440,13 @@ class PDF(FPDF):
 
     def add_json(self,json_data):
         self.add_colored_json(json_data, x=10, y=30, w=190, h=250)
+
+    def write(self,name):
+        print(f"Writing {name}.pdf")
+        self.output(f"{name}.pdf")
+
+
+    def addpage(self):
+        super().add_page()
 
 #----------------------------------------------------------------
