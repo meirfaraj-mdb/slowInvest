@@ -44,7 +44,7 @@ class BufferedSlAtlasSource(SlSource):
             for entry in resp['slowQueries']:
                 await self.line_filter.process(entry.get('line',""))
             if last_count>=self.valueHigh:
-                last_entry=resp['slowQueries'][-1]
+                last_entry=resp['slowQueries'][-1].get('line',"")
                 self.dtime = get_time_from_line(last_entry)
 
 
