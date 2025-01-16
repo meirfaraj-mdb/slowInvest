@@ -6,6 +6,12 @@ import msgspec
 encoder = msgspec.json.Encoder()
 decoder = msgspec.json.Decoder()
 
+def get_time_from_line(line):
+    log_entry = decoder.decode(line)
+    timestamp = log_entry.get("t", {}).get("$date",None)
+    if timestamp is None:
+        return None
+    return datetime.fromisoformat(timestamp)
 
 class JsonAndText:
     def __init__(self,line,source,shard):

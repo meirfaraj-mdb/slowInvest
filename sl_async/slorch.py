@@ -5,7 +5,6 @@ import time
 from concurrent import futures
 from datetime import datetime
 
-import msgspec
 
 from sl_async.gzip import BufferedGzipReader, BufferedGzipWriter
 from sl_json.json import JsonAndText
@@ -14,6 +13,7 @@ from sl_utils.utils import convertToHumanReadable,remove_extension,createDirs
 
 import msgspec
 
+encoder = msgspec.json.Encoder()
 decoder = msgspec.json.Decoder()
 
 
@@ -78,6 +78,11 @@ class AsyncExtractAndAggregate:
             if dtime is not None:
                 result["resume"]["dtime"]=datetime.fromisoformat(dtime)
         return result
+
+    def write_result(self):
+        with open(f"{self.parquet_file_path_base}resume.json","w") as in_file:
+            in_file.write(encoder.encode(self.result["resume"]).decode())
+
 
     def get_dtime(self):
         return self.result.get("resume",{}).get("dtime",None)
@@ -152,6 +157,7 @@ class AsyncExtractAndAggregate:
         elapsed_time_ms = (end_time - start_waiting) * 1000
         logging.info(f"waiting for last pool took {convertToHumanReadable("Millis",elapsed_time_ms)}")
         self.pool.shutdown(wait=True)
+        self.write_result()
         end_time = time.time()
         elapsed_time_ms = (end_time - start_time) * 1000
         logging.info(f"Extracted {self.result["countOfSlow"]} slow queries have been saved to {self.dest.get_path()} and {self.parquet_file_path_base} in {convertToHumanReadable("Millis",elapsed_time_ms)}")
