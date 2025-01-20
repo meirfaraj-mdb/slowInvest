@@ -7,6 +7,15 @@ import concurrent
 import msgspec
 
 decoder = msgspec.json.Decoder()
+def get_nested_value(data, key):
+    keys = key.split('.')
+    value = data
+    for k in keys:
+        if isinstance(value, dict):
+            value = value.get(k, '')
+        else:
+            return ''
+    return value
 
 #------------------------------------------------------------------------------------
 # Pdf related
@@ -313,6 +322,64 @@ class PDFReport(FPDF,AbstractReport):
             ]
             for line in displayCluster:
                 self.display_line(col_width,row_height,line[0],connectionStrings.get(line[1],None))
+        scaling=cluster.get("scaling",[])
+        if len(scaling)>0:
+            self.subChapter_title("Scaling information "+cluster.get("name",""))
+            col_diff={'id':6,'created':2,'scal_type':-8,'raw.originalCostPerHour':-4,'raw.newCostPerHour':-4,'raw.isAtMaxCapacityAfterAutoScale':8}
+            for scal in scaling:
+                scal["scal_type"]="COMPUTE" if scal.get('eventTypeName',"").startswith("COMPUTE") else "DISK"
+            self.add_table(scaling,
+                   ['id','created','scal_type','raw.originalCostPerHour','raw.newCostPerHour', 'raw.originalDiskSizeGB','raw.newDiskSizeGB','raw.originalInstanceSize', 'raw.newInstanceSize','raw.isAtMaxCapacityAfterAutoScale'],
+                   ['id','time','scale type','orig Cost/Hour','new Cost/Hour', 'orig DiskSizeGB','new DiskSizeGB','orig instance', 'new instance','@MaxCapacityAfterAutoScale'],
+                           col_diff,5)
+            self.subChapter_title("Scaling Details"+cluster.get("name",""))
+            for scal in scaling:
+                computeAutoScaleTriggers=scal.get('raw',{}).get("computeAutoScaleTriggers","")
+                if len(computeAutoScaleTriggers)==0:
+                    computeAutoScaleTriggers=""
+                scal["compute_auto_scaling_triggers"]=scal.get('computeAutoScalingTriggers',"")+"\n"+str(computeAutoScaleTriggers)
+            col_diff={'id':-75,"compute_auto_scaling_triggers":75}
+            self.add_table(scaling,
+                           ['id', 'compute_auto_scaling_triggers'],
+                           ['id','compute auto scale triggers'],
+                           col_diff,4,5)
+
+    def add_table(self, data_list, columns,columns_name=None,col_size_diff={},size=4,line=1):
+        """Add a pdf table."""
+        # Add column headers
+        num_columns = len(columns)
+        self.set_font('helvetica', 'B', size)
+        col_width = self.epw / num_columns
+        row_height = self.font_size * 1.5
+
+        diff_col = []
+        for col in columns:
+            diff_col.append(col_size_diff.get(col,0))
+        if columns_name is None:
+            i=0
+            for col in columns:
+                self.cell(col_width+diff_col[i], row_height, self.clean_name(col), border=1)
+                i+=1
+        else:
+            i=0
+            for col in columns_name:
+                self.cell(col_width+diff_col[i], row_height, str(col), border=1)
+                i+=1
+        self.ln(row_height)
+        self.set_font('helvetica', '', size)
+        # Add each data row
+        for data in data_list:
+            i=0
+            for col in columns:
+                if(i<len(columns)-1):
+                    self.cell(col_width+diff_col[i], line*row_height, str(get_nested_value(data,col)),
+                                    new_y=YPos.TOP, border=1)
+                else:
+                    self.multi_cell(col_width+diff_col[i], row_height, str(get_nested_value(data,col)),
+                                new_y=YPos.TOP, border=1)
+                i+=1
+            self.ln(row_height*line)
+
 
 
     def table(self, row, columns):

@@ -4,6 +4,15 @@ from pathlib import Path
 import logging
 mdreports_logging = logging.getLogger("md_reports")
 mdreports_logging.setLevel(logging.DEBUG)
+def get_nested_value(data, key):
+    keys = key.split('.')
+    value = data
+    for k in keys:
+        if isinstance(value, dict):
+            value = value.get(k, '')
+        else:
+            return ''
+    return value
 
 class MDReport(AbstractReport):
 
@@ -88,7 +97,7 @@ class MDReport(AbstractReport):
                 if value:
                     aggregated_values[base_name][summary_type] = value
         # Render unique/non-aggregated values
-        self.content.append("#### Non-Aggregated Values")
+        self.sub2Chapter_title("Non-Aggregated Values")
         unique_columns = [col for col in columns if not col.endswith(('_min', '_max', '_avg', '_total', '_count'))]
         for col in unique_columns:
             value = row.get(col, '')
@@ -99,7 +108,7 @@ class MDReport(AbstractReport):
             self.content.append(f"- **{col}**: {value}")
         # Render aggregated values in table form
         if aggregated_values:
-            self.content.append("\n#### Aggregated Values\n")
+            self.sub2Chapter_title("Aggregated Values")
 
             # Header and separator
             headers = ["Metric", "Min", "Max", "Avg", "Total", "Count"]
@@ -135,7 +144,7 @@ class MDReport(AbstractReport):
             ("Backup Enabled", cluster.get('backupEnabled')),
             ("Paused", cluster.get('paused')),
         ]
-        self.add_paragraph("### General Cluster Information")
+        self.subChapter_title("General Cluster Information")
         for label, value in general_info:
             if value not in [None, '', '0', False]:
                 self.content.append(f"- **{label}**: {value}")
@@ -171,20 +180,32 @@ class MDReport(AbstractReport):
                         specs = region.get(spec_type, {})
                         if specs:
                             self.content.append(f"- **{spec_type}**: {specs}")
+        scaling=cluster.get("scaling",[])
+        if len(scaling)>0:
+            self.subChapter_title("Scaling information")
+            self.add_table(scaling,
+                           ['id','created', 'clusterName','computeAutoScalingTriggers','eventTypeName','raw.computeAutoScaleTriggers','raw.originalCostPerHour','raw.newCostPerHour', 'raw.originalDiskSizeGB','raw.newDiskSizeGB','raw.originalInstanceSize', 'raw.newInstanceSize','raw.isAtMaxCapacityAfterAutoScale'],
+                           ['id','time', 'cluster','triggers','event type','computeAutoScaleTriggers','orig Cost/Hour','new Cost/Hour', 'orig DiskSizeGB','new DiskSizeGB','orig instance', 'new instance','isAtMaxCapacityAfterAutoScale']
+                           )
+
 
     def add_image(self, image_path):
         self.add_image_md(image_path,"","")
 
 
-    def add_table(self, data_list, columns):
+    def add_table(self, data_list, columns,columns_name=None):
         """Add a markdown table."""
         # Add column headers
-        headers = "| " + " | ".join(columns) + " |"
+        if columns_name is None:
+            headers = "| " + " | ".join(columns) + " |"
+        else:
+            headers = "| " + " | ".join(columns_name) + " |"
+
         separator = "| " + " | ".join(['----' for _ in columns]) + " |"
         self.content += [headers, separator]
         # Add each data row
         for data in data_list:
-            row_content = "| " + " | ".join(str(data.get(col, '')) for col in columns) + " |"
+            row_content = "| " + " | ".join(str(get_nested_value(data,col)) for col in columns) + " |"
             self.content.append(row_content)
         self.content.append("\n")
 
@@ -234,5 +255,5 @@ class MDReport(AbstractReport):
                     self.content[idx] = str(item)
 
             # Write the content to the file
-            f.write("\n\n".join(self.content))
+            f.write("\n".join(self.content))
         print(f"Markdown report written to {filename}.md.")

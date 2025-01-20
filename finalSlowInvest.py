@@ -171,7 +171,7 @@ def atlas_retrieval_mode(config,report):
         end_time_comp = time.time()
         print(f"Received project {config.GROUP_ID} composition in {convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)}")
         for cluster in compositions :
-            generate_cluster_report(atlasApi, cluster, config, report)
+            generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report)
 
 
     elif config.ATLAS_RETRIEVAL_SCOPE == "clusters":
@@ -182,7 +182,7 @@ def atlas_retrieval_mode(config,report):
             end_time_comp = time.time()
             print(f"Received cluster {cluster_name} composition in {convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)}")
             for cluster in compositions :
-                generate_cluster_report(atlasApi, cluster, config, report)
+                generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report)
 
     else: #processId
         for process in config.PROCESSES_ID:
@@ -204,10 +204,11 @@ def remove_status_suffix(text):
         return text
 
 
-def generate_cluster_report(atlasApi, cluster, config, report):
+def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
     if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
         report = Report(config.get_report_formats())
         report.addpage()
+    cluster["scaling"]=allScallingEvt.get(cluster.get("name"),[])
     processesShard = cluster.get("processes", {})
     with concurrent.futures.ProcessPoolExecutor() as pool:
         results={}
