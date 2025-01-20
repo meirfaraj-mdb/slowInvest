@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}Job Page{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Configuration Jobs</h3>
+                </div>
+                <div class="card-body">
+                    <table id="config-table" class="table table-bordered table-striped">
+                        <thead>
+                        <tr>
+                            <th>Configuration</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for config in configs %}
+                        <tr>
+                            <td>{{ config }}</td>
+                            <td>
+                                <button id="run-btn-{{ forloop.counter }}" class="btn btn-success" onclick="runJob('{{ config }}', this)">Run</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer">
+                    <h4>Add Configuration</h4>
+                    <input type="file" id="config_file" class="form-control">
+                    <button class="btn btn-primary mt-2" onclick="uploadConfig()">Upload</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="output" class="mt-4 alert alert-info" style="display: none;"></div>
+</div>
+
+<script>
+    function disableButton(button) {
+        button.disabled = true;
+        button.innerText = 'Running...';
+    }
+
+    function enableButton(button, originalText) {
+        button.disabled = false;
+        button.innerText = originalText;
+    }
+
+    function runJob(configName, button) {
+        disableButton(button);
+        document.getElementById("output").style.display = 'block';
+        document.getElementById("output").innerHTML = `Starting job for config: ${configName}`;
+
+        fetch(`/run-config/${configName}/`, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": "{{ csrf_token }}",
+                "Content-Type": "application/json",
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById("output").innerHTML = data.success ?
+                `Success: ${data.message}` :
+                `Error: ${data.error}`;
+            enableButton(button, 'Run');
+        })
+        .catch(error => {
+            console.error("Error:", error);
+            document.getElementById("output").innerHTML = "An error occurred while running the job.";
+            enableButton(button, 'Run');
+        });
+    }
+
+    function uploadConfig() {
+        const configFile = document.getElementById("config_file").files[0];
+        if (configFile) {
+            const formData = new FormData();
+            formData.append("config_file", configFile);
+
+            fetch("{% url 'upload_config' %}", {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": "{{ csrf_token }}"
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                if (data.success) {
+                    window.location.reload();  // Refresh page to see new config
+                }
+            })
+            .catch(error => console.error("Error uploading config:", error));
+        } else {
+            alert("Please select a file to upload.");
+        }
+    }
+</script>
+{% endblock %}

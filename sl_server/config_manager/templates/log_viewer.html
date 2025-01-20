@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Log Viewer{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <!-- Table with Logs -->
+        <div class="col-md-12">
+            <table class="table table-bordered">
+                <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Last Modified</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for log in logs %}
+                <tr id="log-{{ forloop.counter }}">
+                    <td>{{ log.name }}</td>
+                    <td>{{ log.modified|date:"Y-m-d H:i:s" }}</td>
+                    <td>
+                        <button onclick="viewLog('{{ log.name }}', '{{ forloop.counter }}')" class="btn btn-info">View</button>
+                        <button onclick="deleteLog('{{ log.name }}', {{ forloop.counter }})" class="btn btn-danger">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Log Viewer -->
+        <div id="log-content" class="col-md-12 mt-4" style="display: none;">
+            <h5>Log Content</h5>
+            <pre id="log-text"></pre>
+        </div>
+    </div>
+</div>
+
+<script>
+    function viewLog(logName, rowId) {
+      fetch(`/view-log/${logName}/`)
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById("log-content").style.display = 'block';
+        document.getElementById("log-text").innerHTML = data.content;
+      })
+      .catch(error => console.error('Error viewing log:', error));
+    }
+
+    function deleteLog(logName, rowId) {
+      fetch(`/delete-log/${logName}/`, {
+        method: 'DELETE',
+        headers: {
+          'X-CSRFToken': '{{ csrf_token }}'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Log deleted successfully.');
+          document.getElementById(`log-${rowId}`).remove();
+        } else {
+          alert('Error deleting log: ' + data.error);
+        }
+      })
+      .catch(error => console.error('Error deleting log:', error));
+    }
+</script>
+{% endblock %}

@@ -12,3 +12,4 @@ aiofile>=3.9.0
 #dask>=2024.12.1
 
 Faker>=33.3.0
+Django>=5.1.4

@@ -20,7 +20,16 @@ class Config():
 
     def __init__(self, configName):
         self.default = load_config(f"config/default/default.json")
+        createDirs("logs/")
 
+        logging.basicConfig(
+            level=logging.DEBUG,  # Set desired level (e.g., INFO, DEBUG, WARNING)
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler("logs/logApp.log"),  # Log to specified file
+                logging.StreamHandler()  # Optionally log to console as well
+            ]
+        )
         # Load the configuration
         if configName:
             self.config = load_config(f"config/{configName}.json")

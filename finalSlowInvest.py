@@ -1,3 +1,4 @@
+import os
 import time
 
 #  pip install -r requirements.txt
@@ -11,6 +12,10 @@ from sl_plot.graphs import createAndInsertGraphs
 from sl_utils.utils import convertToHumanReadable
 import sys
 import concurrent.futures
+
+import sys
+import subprocess
+from argparse import ArgumentParser
 
 
 #---------------------------------------------------------------------------
@@ -156,6 +161,9 @@ def display_cluster(config,report,cluster):
 
 def atlas_retrieval_mode(config,report):
     atlasApi = AtlasApi(config)
+
+    allScallingEvt= atlasApi.getAutoScalingEvent(config.GROUP_ID,cluster_names=None)
+
     if config.ATLAS_RETRIEVAL_SCOPE == "project":
         print(f"Get project {config.GROUP_ID} composition....")
         start_time_comp = time.time()
@@ -267,12 +275,44 @@ def file_retrieval_mode(config,report):
         if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
             report.write(f"{config.REPORT_FILE_PATH}/slow_report{file}")
 
+
+def start_server():
+    try:
+        import django
+        # Start the Django server
+        subprocess.run(["python", "manage.py", "runserver", "0.0.0.0:8000"], cwd='sl_server')
+        sys.exit(0)
+    except ImportError:
+        print("Django is not installed. Please install it using 'pip install Django'.")
+        sys.exit(1)
+
+
+
+def list_config_files(directory):
+    """List all files in the given directory without their extension."""
+    files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+    return [os.path.splitext(f)[0] for f in files]
+
+
 #----------------------------------------------------------------------------------------
 #  Main :
 if __name__ == "__main__":
     if sys.version_info[0:2] != (3, 13):
         raise Exception('Requires python 3.13')
     start_time_all=time.time()
+
+    config_directory = "config/"
+    config_choices = list_config_files(config_directory)
+
+    parser = ArgumentParser(description='Analyse slow query')
+    parser.add_argument('--server', action='store_true', help='Start the Django server')
+    parser.add_argument('config_name', nargs='?', choices=config_choices, help='The name of the config to use from config/ directory')
+
+    args = parser.parse_args()
+
+    if args.server:
+        start_server()
+
     first_option = sys.argv[1] if len(sys.argv) > 1 else None
     # Use the first_option in your Config class or elsewhere
     config = Config(first_option)
