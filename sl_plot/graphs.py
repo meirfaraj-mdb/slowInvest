@@ -3,6 +3,7 @@ import os
 from matplotlib import pyplot as plt
 import matplotlib
 import logging
+from datetime import datetime
 graph_logging = logging.getLogger("graphs")
 
 def plot_stats(config, df, value_col, title, ylabel, xlabel='Time', output_file=None, columns=['namespace']):
@@ -198,3 +199,52 @@ def createAndInsertGraphs(config, prefix, report, result):
             if config.DELETE_IMAGE_AFTER_USED and os.path.exists(file_path):
                 os.remove(file_path)
                 print(f"{file_path} has been deleted.")
+
+
+
+
+
+# Function to plot each metric
+def plot_metric(process,metric_name, timestamps, values,prefix):
+    plt.figure(figsize=(10, 5))
+    plt.plot(timestamps, values, marker='o')
+    plt.title(f"Metric: {metric_name}")
+    plt.xlabel("Timestamp")
+    plt.ylabel("Value")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    svg_file_path = f"{prefix}_{metric_name}.svg"
+    svg_file_path = svg_file_path.replace(':', '_')
+    plt.savefig(svg_file_path, format="svg")
+    graph_logging.info(f"Metric graph saved to {svg_file_path}")
+    return svg_file_path
+
+def plot_all_metricsForProcess(process, report,config,prefix):
+    measurements = process.get("future", {}).get("measurement",None)
+    if measurements is None:
+        return
+    measurements = measurements.result()
+    if report:
+        report.sub2Chapter_title("Metrics graph")
+
+    for measurement in measurements.get("measurements",[]):
+        data_points = measurement['dataPoints']
+        metric_name = measurement['name']
+        # Extract non-None and non-zero data
+        filtered_data = [(dp['timestamp'], dp['value']) for dp in data_points if dp['value'] is not None and dp['value'] != 0]
+        not_none_data = [(dp['timestamp'], dp['value']) for dp in data_points if dp['value'] is not None]
+        if filtered_data:
+            # Separate timestamps and values
+            timestamps, values = zip(*not_none_data)
+
+            # Convert timestamps to datetime objects
+            timestamps = [datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ") for ts in timestamps]
+            # Plot the metric
+            file = plot_metric(process,metric_name, timestamps, values,prefix)
+
+            if file.endswith(("PROCESS_NORMALIZED_CPU_USER.svg","DB_STORAGE_TOTAL.svg","CONNECTIONS.svg")):
+                if report:
+                    report.addpage()
+                    report.add_image(file)
+        else:
+            print(f"Skipped metric {metric_name} as all data points are None or 0.")

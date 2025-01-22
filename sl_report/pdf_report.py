@@ -1,3 +1,5 @@
+import logging
+
 from fpdf import *
 from fpdf.enums import XPos,YPos
 
@@ -6,7 +8,94 @@ from sl_utils.utils import *
 import concurrent
 import msgspec
 
+from datetime import datetime
+
+pdf_reports_logging = logging.getLogger("pdf_reports")
+pdf_reports_logging.setLevel(logging.DEBUG)
+
 decoder = msgspec.json.Decoder()
+
+def create_instance_size_timeline(events):
+    # Sort events by their creation time
+    events_sorted = sorted(events, key=lambda x: x['created'])
+
+    # Initialize the timeline
+    timeline = []
+
+    # Track previous instance size and the start time of the current segment
+    previous_instance_size = None
+    current_start_time = None
+
+    for event in events_sorted:
+        event_time = event['created']
+        raw_data = event.get("raw", {})
+        instance_size = raw_data.get('newInstanceSize')
+        original_instance_size = raw_data.get('originalInstanceSize')
+        baseBoundsUpdates = raw_data.get("baseBoundsUpdates",{})
+        if baseBoundsUpdates is None:
+            boundsUpdates = raw_data.get("boundsUpdates",{})
+            if boundsUpdates is None:
+                new_min_instance_size = None
+                new_max_instance_size = None
+            else:
+                new_min_instance_size = boundsUpdates.get('newMinInstanceSize',None)
+                new_max_instance_size = boundsUpdates.get('newMaxInstanceSize',None)
+
+        else:
+            new_min_instance_size = baseBoundsUpdates.get('newMinInstanceSize',None)
+            new_max_instance_size = baseBoundsUpdates.get('newMaxInstanceSize',None)
+
+        # Convert creation time to a datetime object
+        event_datetime = datetime.strptime(event_time, "%Y-%m-%dT%H:%M:%SZ")
+
+        # If instance size is None, assume continuous size from previous timeline
+        if instance_size is None:
+            if previous_instance_size is not None and current_start_time is not None:
+                end_time = event_datetime
+                timeline.append({"start":current_start_time,
+                                 "end":end_time,
+                                 "instanceSize":previous_instance_size,
+                                 "is_min_instance":False,
+                                 "is_max_instance":False})
+                current_start_time = end_time
+            continue
+
+        # Check for size discrepancy
+        if previous_instance_size is not None and original_instance_size != previous_instance_size:
+            # Insert a transition entry indicating unknown change due to manual or missing event
+            unknown_instance = f"unknown_{previous_instance_size}_{original_instance_size}"
+            timeline.append({"start":current_start_time,
+                             "end":event_datetime,
+                             "instanceSize":unknown_instance,
+                             "is_min_instance":False,
+                             "is_max_instance":False})
+            current_start_time = event_datetime
+        # Determine if the new instance size matches the min/max thresholds
+        is_min_instance = instance_size == new_min_instance_size
+        is_max_instance = instance_size == new_max_instance_size
+
+        # Add actual instance change to the timeline
+        if current_start_time is not None:
+            timeline.append({"start":current_start_time,
+                             "end":event_datetime,
+                             "instanceSize":instance_size,
+                             "is_min_instance":is_min_instance,
+                             "is_max_instance":is_max_instance})
+
+        # Update state for next iteration
+        previous_instance_size = instance_size
+        current_start_time = event_datetime
+
+    # Ensure to close the last segment
+    if current_start_time is not None and previous_instance_size is not None:
+        timeline.append({"start":current_start_time,
+                         "end":events_sorted[-1]['created'],
+                         "instanceSize":previous_instance_size,
+                         "is_min_instance":False,
+                         "is_max_instance":False})
+
+    return timeline
+
 def get_nested_value(data, key):
     keys = key.split('.')
     value = data
@@ -343,6 +432,21 @@ class PDFReport(FPDF,AbstractReport):
                            ['id', 'compute_auto_scaling_triggers'],
                            ['id','compute auto scale triggers'],
                            col_diff,4,5)
+            timeline = create_instance_size_timeline(scaling)
+            # Output the timeline
+            self.sub2Chapter_title("Scaling At minimum for "+cluster.get("name",""))
+            minTable = [dp for dp in timeline if dp.get('is_min_instance',False)]
+            self.add_table(minTable,
+                           ['start', 'end','instanceSize'],size=8)
+
+            self.sub2Chapter_title("Scaling At maximum for "+cluster.get("name",""))
+            maxTable = [dp for dp in timeline if dp.get('is_max_instance',False)]
+            self.add_table(maxTable,
+                           ['start', 'end','instanceSize'])
+
+            for dp in timeline:
+                print(f"Start: {dp.get("start","")}, End: {dp.get("end","")}, Instance Size: {dp.get("instanceSize","")}, isMinInstance: {dp.get("is_min_instance","")}, isMaxInstance: {dp.get("is_max_instance","")}")
+
 
     def add_table(self, data_list, columns,columns_name=None,col_size_diff={},size=4,line=1):
         """Add a pdf table."""
@@ -450,10 +554,14 @@ class PDFReport(FPDF,AbstractReport):
         self.ln()
 
     def add_image(self, image_path):
-        self.image(image_path,
+        try:
+            self.image(image_path,
                    x=2,
                    w=self.epw,
                    keep_aspect_ratio=True)
+        except Exception as err:
+            pdf_reports_logging.error(f"fail to add image {image_path}",err)
+
         #self.ln(10)
     def add_colored_json(self, json_data, x, y, w, h):
         self.set_font("Courier", "", 7)

@@ -8,7 +8,7 @@ from sl_atlas.AtlasApi import AtlasApi
 from sl_report.report import Report
 from sl_async.slorch import extract_slow_queries_from_file
 from sl_config.config import Config
-from sl_plot.graphs import createAndInsertGraphs
+from sl_plot.graphs import createAndInsertGraphs, plot_all_metricsForProcess
 from sl_utils.utils import convertToHumanReadable
 import sys
 import concurrent.futures
@@ -89,7 +89,7 @@ def display_queries(reportTitle,report, df):
 #----------------------------------------------------------------------------------------
 # report
 
-def addToReport(result,prefix,report,config):
+def addToReport(result,prefix,report,config,process=None):
     report.chapter_title(f"Slow Query Report Summary : {prefix}")
     report.subChapter_title("General")
     report.chapter_body(f"Instance : {prefix}")
@@ -100,6 +100,8 @@ def addToReport(result,prefix,report,config):
 
     createAndInsertGraphs(config, prefix, report, result)
 
+    if not(process is None) :
+        plot_all_metricsForProcess(process, report,config,prefix)
     # Group by command shape and calculate statistics
     command_shape_stats = result["groupByCommandShape"].get("global",{})
     if len(command_shape_stats)>0 and command_shape_stats.shape[0]>0:
@@ -241,7 +243,8 @@ def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
                     results[processes.get("id","")].result(),
                     f"{config.OUTPUT_FILE_PATH}/{shard_num}_{processes.get("id", "")}_{remove_status_suffix(processes.get("typeName", ""))}",
                     report,
-                    config)
+                    config,
+                    processes)
                 continue
             primary = processes.get("primary", {})
             #atlasApi.get_database_composition_for_process(cluster, primary)
@@ -249,7 +252,8 @@ def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
                 results[primary.get("id", "")].result(),
                 f"{config.OUTPUT_FILE_PATH}/{shard_num}_{primary.get("id", "")}_{remove_status_suffix(primary.get("typeName", ""))}",
                 report,
-                config)
+                config,
+                primary)
             atlasApi.get_database_composition_sizing_for_process(cluster, primary)
 
             others = processes.get("others", {})
@@ -258,7 +262,8 @@ def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
                     results[proc.get("id", "")].result(),
                     f"{config.OUTPUT_FILE_PATH}/{shard_num}_{proc.get("id", "")}_{remove_status_suffix(proc.get("typeName", ""))}",
                     report,
-                    config)
+                    config,
+                    proc)
     if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
         report.write(f"{config.REPORT_FILE_PATH}/slow_report{cluster.get("name")}")
 
