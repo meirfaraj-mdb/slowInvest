@@ -423,8 +423,8 @@ class PDFReport(FPDF,AbstractReport):
                            col_diff,5)
             self.subChapter_title("Scaling Details"+cluster.get("name",""))
             for scal in scaling:
-                computeAutoScaleTriggers=scal.get('raw',{}).get("computeAutoScaleTriggers","")
-                if len(computeAutoScaleTriggers)==0:
+                computeAutoScaleTriggers=scal.get('raw',{}).get("computeAutoScaleTriggers",[])
+                if computeAutoScaleTriggers is None or len(computeAutoScaleTriggers)==0:
                     computeAutoScaleTriggers=""
                 scal["compute_auto_scaling_triggers"]=scal.get('computeAutoScalingTriggers',"")+"\n"+str(computeAutoScaleTriggers)
             col_diff={'id':-75,"compute_auto_scaling_triggers":75}

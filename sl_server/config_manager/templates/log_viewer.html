@@ -3,37 +3,50 @@
 {% block title %}Log Viewer{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container-fluid">
     <div class="row">
         <!-- Table with Logs -->
-        <div class="col-md-12">
-            <table class="table table-bordered">
-                <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Last Modified</th>
-                    <th>Actions</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for log in logs %}
-                <tr id="log-{{ forloop.counter }}">
-                    <td>{{ log.name }}</td>
-                    <td>{{ log.modified|date:"Y-m-d H:i:s" }}</td>
-                    <td>
-                        <button onclick="viewLog('{{ log.name }}', '{{ forloop.counter }}')" class="btn btn-info">View</button>
-                        <button onclick="deleteLog('{{ log.name }}', {{ forloop.counter }})" class="btn btn-danger">Delete</button>
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+        <div class="col-12" style="overflow-x: auto; max-height: 300px; overflow-y: scroll;">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Logs</h3>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-bordered table-hover">
+                        <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Last Modified</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for log in logs %}
+                        <tr id="log-{{ forloop.counter }}">
+                            <td>{{ log.name }}</td>
+                            <td>{{ log.modified|date:"Y-m-d H:i:s" }}</td>
+                            <td>
+                                <button onclick="viewLog('{{ log.name }}', '{{ forloop.counter }}')" class="btn btn-info">View</button>
+                                <button onclick="deleteLog('{{ log.name }}', {{ forloop.counter }})" class="btn btn-danger">Delete</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <!-- Log Viewer -->
-        <div id="log-content" class="col-md-12 mt-4" style="display: none;">
-            <h5>Log Content</h5>
-            <pre id="log-text"></pre>
+        <div id="log-content" class="col-12 mt-4" style="display: none; max-height: 400px; overflow-y: scroll;">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Log Content</h3>
+                </div>
+                <div class="card-body">
+                    <pre id="log-text"></pre>
+                </div>
+            </div>
         </div>
     </div>
 </div>

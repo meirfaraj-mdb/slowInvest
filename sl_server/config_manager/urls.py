@@ -26,7 +26,8 @@ urlpatterns = [
     path('log-viewer/', views.log_viewer, name='log_viewer'),
     path('view-log/<str:log_name>/', views.view_log, name='view_log'),
     path('delete-log/<str:log_name>/', views.delete_log, name='delete_log'),
+    path('report-pdf-viewer/', views.report_pdf_viewer, name='report_pdf_viewer'),
+    path('view-report/<str:report_name>/', views.view_report, name='view_report'),
     #    path('download/<str:report_name>/', views.download_report, name='download_report'),
 ]
-
 

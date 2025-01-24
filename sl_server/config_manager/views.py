@@ -6,10 +6,13 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 
 import logging
+# views.py
+from django.shortcuts import render
+
 view_logging = logging.getLogger("django_view")
 CONFIG_DIR = '../config/'
 LOGS_DIR = '../logs/'
-
+REPORT_DIR = '../reports/'
 
 
 def list_configs():
@@ -26,6 +29,42 @@ def job_page(request):
     """View to display the job page with the list of configurations."""
     configs = list_configs()
     return render(request, 'job_page.html', {'configs': configs})
+
+def list_report(ext="pdf"):
+    """Lists all config files in the config directory without file extensions."""
+    if not os.path.exists(REPORT_DIR):
+        os.makedirs(REPORT_DIR)
+    reports=[]
+    if os.path.exists(REPORT_DIR):
+        for report_file in os.listdir(REPORT_DIR):
+            file_path = os.path.join(REPORT_DIR, report_file)
+            if os.path.isfile(file_path) and os.path.splitext(file_path)[-1] == f".{ext}":
+                reports.append({
+                    'name': report_file,
+                    'modified': os.path.getmtime(file_path),
+                })
+    return reports
+
+
+
+def report_pdf_viewer(request):
+    """View to display the job page with the list of configurations."""
+    reports = list_report()
+    return render(request, 'report_pdf_viewer.html', {'reports': reports})
+
+def view_report(request, report_name):
+    # Path to the PDF file
+    file_path = os.path.join(REPORT_DIR, report_name)
+
+    # Check if the file exists
+    if not os.path.exists(file_path):
+        return HttpResponse('File not found', status=404)
+
+    # Open the PDF file
+    with open(file_path, 'rb') as pdf:
+        response = HttpResponse(pdf.read(), content_type='application/pdf')
+        response['Content-Disposition'] = f'inline;filename={report_name}'
+        return response
 
 
 @csrf_exempt
