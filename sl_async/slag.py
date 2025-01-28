@@ -3,9 +3,8 @@ import time
 from datetime import datetime, timedelta
 
 import pandas as pd
-import pyarrow as pa
-from pyarrow import parquet as pq
 
+from sl_async.st_parquet import write_parquet
 from sl_json.json import encoder, DF_COL
 from sl_utils.utils import createDirs
 
@@ -259,11 +258,3 @@ def updateCommandShapeGroupGlobal(result):
         result[type]["global"] = shape_aggA(result[type]["hours"])
     return True
 
-
-def write_parquet(df_chunk, path):
-    for col in df_chunk.select_dtypes(include=['object']).columns:
-        df_chunk[col] = df_chunk[col].astype(str)
-    table = pa.Table.from_pandas(df_chunk)
-    pq_writer = pq.ParquetWriter(path, table.schema, compression='SNAPPY')
-    pq_writer.write_table(table)
-    pq_writer.close()

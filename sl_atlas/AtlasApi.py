@@ -1,4 +1,5 @@
 import concurrent
+import logging
 import re
 
 import msgspec
@@ -9,6 +10,9 @@ from sl_async.gzip import BufferedGzipWriter
 from sl_async.slatlas import BufferedSlAtlasSource
 from sl_async.slorch import AsyncExtractAndAggregate
 from sl_utils.utils import remove_extension, createDirs
+
+atlas_logging = logging.getLogger("atlas")
+atlas_logging.setLevel(logging.DEBUG)
 
 decoder = msgspec.json.Decoder()
 def convert_list_to_dict(databases):
@@ -61,7 +65,8 @@ class AtlasApi():
 
     # retrieve slow queries
     def retrieveLast24HSlowQueriesFromCluster(self,groupId,processId,shard, output_file_path, chunk_size=50000,save_by_chunk="none"):
-        parquet_file_path_base=f"{remove_extension(output_file_path)}/"
+        output_file_path_without_ext = remove_extension(output_file_path)
+        parquet_file_path_base=f"{output_file_path_without_ext}/"
         createDirs(parquet_file_path_base)
 
         src= BufferedSlAtlasSource(self,groupId,processId)
@@ -605,13 +610,13 @@ class AtlasApi():
         processes_by_cluster = {}
         for cluster in clusters.get('results',[]):
             cluster_name=cluster.get('name')
-            cluster["futur"]={}
+            cluster["future"]={}
             if full:
-                cluster["futur"]["performanceAdvisorSuggestedIndexes"] = pool.submit(self.getPerformanceAdvisorSuggestedIndexes,group_id,cluster_name)
-                cluster["futur"]["onlineArchiveForOneCluster"] = pool.submit(self.getAllOnlineArchiveForOneCluster,group_id,cluster_name)
-                cluster["futur"]["backupCompliance"] = pool.submit(self.getBackupCompliance,group_id)
-                cluster["futur"]["backup"] = pool.submit(self.listAllBackupSnapshotForCluster,group_id,cluster_name,cluster["clusterType"])
-                cluster["futur"]["advancedConfiguration"] = pool.submit(self.getAdvancedConfigurationForOneCluster,group_id, cluster_name)
+                cluster["future"]["performanceAdvisorSuggestedIndexes"] = pool.submit(self.getPerformanceAdvisorSuggestedIndexes,group_id,cluster_name)
+                cluster["future"]["onlineArchiveForOneCluster"] = pool.submit(self.getAllOnlineArchiveForOneCluster,group_id,cluster_name)
+                cluster["future"]["backupCompliance"] = pool.submit(self.getBackupCompliance,group_id)
+                cluster["future"]["backup_snapshot"] = pool.submit(self.listAllBackupSnapshotForCluster,group_id,cluster_name,cluster["clusterType"])
+                cluster["future"]["advancedConfiguration"] = pool.submit(self.getAdvancedConfigurationForOneCluster,group_id, cluster_name)
 
             replicationSpecs = cluster.get('replicationSpecs',None)
             providersSet = set()
@@ -687,6 +692,34 @@ class AtlasApi():
                         processes_by_cluster[cluster_name][shard_number]["others"].append(process)
                     cluster_name_to_inf[cluster_name.lower()]["processes"]=processes_by_cluster[cluster_name]
         return result
+
+    def update_one_future(self,cluster,name):
+        atlas_logging.debug(f"updating future {name}")
+        future = cluster.get("future",{}).get(name,None)
+        if future is None:
+            atlas_logging.debug(f"future {name} not found")
+            return
+        concurrent.futures.as_completed(future)
+        try:
+            cluster[name]=future.result()
+        except Exception as exc:
+            atlas_logging.debug(f"failed to retrieve the {name} : {exc}")
+            cluster[f"{name}_configured"]="Fail to retrieve"
+            cluster[f"{name}_count"]=0
+        else:
+            cluster[f"{name}_configured"]="True" if len(cluster[name])>0 else "False"
+            cluster[f"{name}_count"]=len(cluster[name])
+
+        del cluster["future"][name]
+
+
+    def update_cluster_future_result(self,cluster):
+        keys=list(cluster.get("future",{}).keys())
+        for key in keys:
+            self.update_one_future(cluster,key)
+        if "future" in cluster:
+            del cluster["future"]
+
 
     def get_database_composition_for_process(self,cluster,process):
         #         for cluster_name, shards in processes_by_cluster.items():

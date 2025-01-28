@@ -19,7 +19,7 @@ def load_config(file_path):
 class Config():
 
     def __init__(self, configName):
-        self.default = load_config(f"config/default/default.json")
+        self.default = load_config("config/default/default.json")
         createDirs("logs/")
 
         logging.basicConfig(
@@ -34,7 +34,7 @@ class Config():
         if configName:
             self.config = load_config(f"config/{configName}.json")
         else:
-            self.config = load_config(f"config/config.json")
+            self.config = load_config("config/config.json")
         # Atlas / files / OpsManager
         self.RETRIEVAL_MODE = self.config.get('RETRIEVAL_MODE', 'files')
         # Atlas/Ops Manager related

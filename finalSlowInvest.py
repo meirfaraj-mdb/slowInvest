@@ -3,53 +3,41 @@ import time
 
 #  pip install -r requirements.txt
 
-from tabulate import tabulate
 from sl_atlas.AtlasApi import AtlasApi
 from sl_report.report import Report
 from sl_async.slorch import extract_slow_queries_from_file
 from sl_config.config import Config
 from sl_plot.graphs import createAndInsertGraphs, plot_all_metricsForProcess
 from sl_utils.utils import convertToHumanReadable
-import sys
 import concurrent.futures
 
 import sys
 import subprocess
 from argparse import ArgumentParser
+import logging
 
 
 #---------------------------------------------------------------------------
 # Plot Util :
-
-
-#-----------------------------------------------------------------------------------------
-# markdown utility :
-
-def save_markdown(df,fileName,comment):
-    if not config.GENERATE_MD:
-        return
-    # Convert the DataFrame to a markdown table
-    markdown_table = tabulate(df, headers='keys', tablefmt='pipe')
-
-    # Save the markdown table to a file
-    with open(fileName, 'w') as f:
-        f.write(markdown_table)
-
-    print("\nStatistics by Command "+comment+" Shape (sorted by average duration) have been saved to '"+fileName+"'")
-
-
 
 #----------------------------------------------------------------------------------------
 # display slow query
 def process_row(index, row,report,columns):
     # Define a function to apply to each row
     report.addpage()
+
+    cmdType=convertToHumanReadable('cmdType',row['cmdType'])
+    namespace=convertToHumanReadable('namespace',row['namespace'])
+    durationMillis_str=convertToHumanReadable('durationMillis',row['durationMillis_total'],True)
+    slow_query_count=row['slow_query']
+    bytesTotalDiskWR=convertToHumanReadable('bytesTotalDiskWR',row['storage_data_bytesTotalDiskWR_total'], True)
+    bytesReslen=convertToHumanReadable('bytesReslen',row['bytesReslen_total'], True)
     report.sub4Chapter_title(
-        f"{convertToHumanReadable('cmdType',row['cmdType'])}"
-        f"({convertToHumanReadable('namespace',row['namespace'])}) :"
-        f" Time={convertToHumanReadable('durationMillis',row['durationMillis_total'],True)}, count={row['slow_query']}"+
-        (f" DISK={convertToHumanReadable('bytesTotalDiskWR',row['storage_data_bytesTotalDiskWR_total'], True)}" if row['storage_data_bytesTotalDiskWR_total']>0 else "")+
-        (f" RES={convertToHumanReadable('bytesReslen',row['bytesReslen_total'], True)}" if row['bytesReslen_total']>0 else ""))
+        f"{cmdType}"
+        f"({namespace}) :"
+        f" Time={durationMillis_str}, count={slow_query_count}"+
+        (f" DISK={bytesTotalDiskWR}" if row['storage_data_bytesTotalDiskWR_total']>0 else "")+
+        (f" RES={bytesReslen}" if row['bytesReslen_total']>0 else ""))
 
 
     report.add_json(row['command_shape'])
@@ -110,7 +98,6 @@ def addToReport(result,prefix,report,config,process=None):
     ################## change stream
     command_shape_cs_stats = result["groupByCommandShapeChangeStream"].get("global",{})
     if (command_shape_cs_stats is not None) and len(command_shape_cs_stats)>0 and command_shape_cs_stats.shape[0]>0:
-        save_markdown(command_shape_cs_stats, 'command_shape_cs_stats.md', "changestream")
         display_queries("List of changestream",report,command_shape_cs_stats)
 
 
@@ -137,21 +124,15 @@ def addCommandShapAnalysis(command_shape_stats, config, report):
     # array filter
     ##without_badIn
     report.subChapter_title("List of slow query shape")
-    save_markdown(filtered_df, 'command_shape_collscan_stats.md', "collscan")
     display_queries("List of Collscan query shape", report, filtered_df)
-    save_markdown(sort_stage_df, 'command_shape_remaining_hasSort_stats.md', "remainingHasSort")
     display_queries("List of remain hasSortStage query shape", report, sort_stage_df)
-    save_markdown(with_conflict, 'withConflict_stats.md', "withConflict")
     display_queries("List of other query withConflict", report, with_conflict)
     ###################SKIP
-    save_markdown(has_skip, 'has_skip_stats.md', "has_skip")
     display_queries("List of other query with skip", report, has_skip)
     ###################bad $in
-    save_markdown(has_skip, 'has_badIn.md', "has_badIn")
     display_queries("List of query with bad $in", report, has_badIn)
     ###################$Regex
     ###################disk
-    save_markdown(without_badIn, 'command_shape_others_stats.md', "others")
     display_queries("List of other query shape", report, without_badIn)
 
 
@@ -171,7 +152,8 @@ def atlas_retrieval_mode(config,report):
         start_time_comp = time.time()
         compositions = atlasApi.get_clusters_composition(config.GROUP_ID,full=config.GENERATE_INFRA_REPORT)
         end_time_comp = time.time()
-        print(f"Received project {config.GROUP_ID} composition in {convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)}")
+        millis_str=convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)
+        print(f"Received project {config.GROUP_ID} composition in {millis_str}")
         for cluster in compositions :
             generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report)
 
@@ -182,7 +164,8 @@ def atlas_retrieval_mode(config,report):
             start_time_comp = time.time()
             compositions = atlasApi.get_clusters_composition(config.GROUP_ID,cluster_name,full=config.GENERATE_INFRA_REPORT)
             end_time_comp = time.time()
-            print(f"Received cluster {cluster_name} composition in {convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)}")
+            millis_str=convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)
+            print(f"Received cluster {cluster_name} composition in {millis_str}")
             for cluster in compositions :
                 generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report)
 
@@ -210,18 +193,24 @@ def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
     if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
         report = Report(config.get_report_formats())
         report.addpage()
+    atlasApi.update_cluster_future_result(cluster)
     cluster["scaling"]=allScallingEvt.get(cluster.get("name"),[])
     processesShard = cluster.get("processes", {})
     with concurrent.futures.ProcessPoolExecutor() as pool:
         results={}
         for shard_num, processes in processesShard.items():
+            name=cluster.get("name")
             if shard_num == "config":
-                path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{remove_status_suffix(processes.get("typeName"))}/{processes.get("hostname")}/"
+                type_without_sfx=remove_status_suffix(processes.get("typeName"))
+                hostname=processes.get("hostname")
+                path=f"{config.OUTPUT_FILE_PATH}/{name}/{type_without_sfx}/{hostname}/"
                 results[processes.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, processes.get("id", ""),shard_num,path,config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
                 continue
             primary = processes.get("primary", {})
             #atlasApi.get_database_composition_for_process(cluster, primary)
-            path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{remove_status_suffix(primary.get("typeName"))}/{shard_num}/{primary.get("hostname")}/"
+            type_without_sfx=remove_status_suffix(primary.get("typeName"))
+            hostname=primary.get("hostname")
+            path=f"{config.OUTPUT_FILE_PATH}/{name}/{type_without_sfx}/{shard_num}/{hostname}/"
             results[primary.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, primary.get("id", ""),shard_num,
                                                                path,
                                                                config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
@@ -229,7 +218,9 @@ def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
 
             others = processes.get("others", {})
             for proc in others:
-                path=f"{config.OUTPUT_FILE_PATH}/{cluster.get("name")}/{remove_status_suffix(proc.get("typeName"))}/{shard_num}/{proc.get("hostname")}/"
+                type_without_sfx=remove_status_suffix(proc.get("typeName"))
+                hostname=proc.get("hostname")
+                path=f"{config.OUTPUT_FILE_PATH}/{name}/{type_without_sfx}/{shard_num}/{hostname}/"
                 results[proc.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, proc.get("id", ""),shard_num,
                                                                    path,
                                                                    config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
@@ -239,18 +230,22 @@ def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
 
         for shard_num, processes in processesShard.items():
             if shard_num == "config":
+                processes_id=processes.get("id", "")
+                type_without_sfx=remove_status_suffix(processes.get("typeName", ""))
                 addToReport(
                     results[processes.get("id","")].result(),
-                    f"{config.OUTPUT_FILE_PATH}/{shard_num}_{processes.get("id", "")}_{remove_status_suffix(processes.get("typeName", ""))}",
+                    f"{config.OUTPUT_FILE_PATH}/{shard_num}_{processes_id}_{type_without_sfx}",
                     report,
                     config,
                     processes)
                 continue
             primary = processes.get("primary", {})
             #atlasApi.get_database_composition_for_process(cluster, primary)
+            primary_id=primary.get("id", "")
+            type_without_sfx=remove_status_suffix(primary.get("typeName", ""))
             addToReport(
                 results[primary.get("id", "")].result(),
-                f"{config.OUTPUT_FILE_PATH}/{shard_num}_{primary.get("id", "")}_{remove_status_suffix(primary.get("typeName", ""))}",
+                f"{config.OUTPUT_FILE_PATH}/{shard_num}_{primary_id}_{type_without_sfx}",
                 report,
                 config,
                 primary)
@@ -258,14 +253,17 @@ def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
 
             others = processes.get("others", {})
             for proc in others:
+                processes_id=proc.get("id", "")
+                type_without_sfx=remove_status_suffix(proc.get("typeName", ""))
                 addToReport(
                     results[proc.get("id", "")].result(),
-                    f"{config.OUTPUT_FILE_PATH}/{shard_num}_{proc.get("id", "")}_{remove_status_suffix(proc.get("typeName", ""))}",
+                    f"{config.OUTPUT_FILE_PATH}/{shard_num}_{processes_id}_{type_without_sfx}",
                     report,
                     config,
                     proc)
     if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
-        report.write(f"{config.REPORT_FILE_PATH}/slow_report{cluster.get("name")}")
+        name=cluster.get("name")
+        report.write(f"{config.REPORT_FILE_PATH}/slow_report{name}")
 
 
 def file_retrieval_mode(config,report):
@@ -303,8 +301,13 @@ def list_config_files(directory):
 #----------------------------------------------------------------------------------------
 #  Main :
 if __name__ == "__main__":
-    if sys.version_info[0:2] != (3, 13):
-        raise Exception('Requires python 3.13')
+    if sys.version_info[0] != 3 or sys.version_info[1] < 11:
+        raise Exception('Requires python 3.11 best (tested only with 3.13.1)')
+
+    if sys.version_info[1] < 13:
+        logging.error(f"{sys.version_info} is not tested best to upgrade to 3.13.1")
+
+
     start_time_all=time.time()
 
     config_directory = "config/"
@@ -337,4 +340,5 @@ if __name__ == "__main__":
     if not config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
         report.write(f"{config.REPORT_FILE_PATH}/slow_report")
     end_time_all=time.time()
-    print(f"work end in {convertToHumanReadable("Millis",(end_time_all-start_time_all)*1000)}")
+    millis_str=convertToHumanReadable("Millis",(end_time_all-start_time_all)*1000)
+    print(f"work end in {millis_str}")

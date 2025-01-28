@@ -69,7 +69,8 @@ class Report(AbstractReport):
         self.reports=[]
         for report in reports:
             module_name = f"sl_report.{report}_report"
-            class_name = f"{report.upper()}Report"
+            report_up=report.upper()
+            class_name = f"{report_up}Report"
             reports_logging.debug(f"adding report type {report} about to load module {module_name} and class {class_name}")
             try:
                 # Dynamically import the module and class

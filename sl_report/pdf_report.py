@@ -273,35 +273,13 @@ class PDFReport(FPDF,AbstractReport):
 
     def display_cluster_table(self,cluster):
         self.add_page()
-        self.chapter_title(f"Cluster {cluster.get('name')} report")
+        name=cluster.get('name')
+        self.chapter_title(f"Cluster {name} report")
         self.subChapter_title(f"General")
         self.set_font('helvetica', 'B', 8)
         col_width = self.epw / 2
         row_height = self.font_size * 1.5
 
-        concurrent.futures.as_completed(cluster["futur"]["backupCompliance"])
-        try:
-            cluster["backupCompliance"]=cluster["futur"]["backupCompliance"].result()
-        except Exception as exc:
-            print(f"failed to retrieve the backupCompliance : {exc}")
-            cluster["backupCompliance_configured"]="Fail to retrieve"
-        else:
-            cluster["backupCompliance_configured"]="True" if len(cluster["backupCompliance"])>0 else "False"
-        del cluster["futur"]["backupCompliance"]
-
-        concurrent.futures.as_completed(cluster["futur"]["backup"])
-        cluster["backup_snapshot"]=cluster["futur"]["backup"].result().get("results",[])
-        cluster["backup_snapshot_count"]=len(cluster["backup_snapshot"])
-        del cluster["futur"]["backup"]
-
-        concurrent.futures.as_completed(cluster["futur"]["onlineArchiveForOneCluster"])
-        cluster["onlineArchiveForOneCluster"]=cluster["futur"]["onlineArchiveForOneCluster"].result().get("results",[])
-        cluster["onlineArchiveForOneCluster_count"]=len(cluster["onlineArchiveForOneCluster"])
-        del cluster["futur"]["onlineArchiveForOneCluster"]
-
-        concurrent.futures.as_completed(cluster["futur"]["performanceAdvisorSuggestedIndexes"])
-        cluster["performanceAdvisorSuggestedIndexes"]=cluster["futur"]["performanceAdvisorSuggestedIndexes"].result()
-        del cluster["futur"]["performanceAdvisorSuggestedIndexes"]
         cluster["performanceAdvisorSuggestedIndexes_count"] = len(cluster["performanceAdvisorSuggestedIndexes"]
                                                                   .get('content',{}).get('suggestedIndexes',[]))
         displayCluster = [
@@ -343,9 +321,6 @@ class PDFReport(FPDF,AbstractReport):
            self.display_line(col_width,row_height,line[0],cluster.get(line[1],None))
         self.subChapter_title(f"Advanced configuration")
 
-        concurrent.futures.as_completed(cluster["futur"]["advancedConfiguration"])
-        cluster["advancedConfiguration"]=cluster["futur"]["advancedConfiguration"].result()
-        del cluster["futur"]["advancedConfiguration"]
         advancedConfiguration = cluster.get('advancedConfiguration', {})
 
         for k,v in advancedConfiguration.items():
@@ -445,7 +420,12 @@ class PDFReport(FPDF,AbstractReport):
                            ['start', 'end','instanceSize'])
 
             for dp in timeline:
-                print(f"Start: {dp.get("start","")}, End: {dp.get("end","")}, Instance Size: {dp.get("instanceSize","")}, isMinInstance: {dp.get("is_min_instance","")}, isMaxInstance: {dp.get("is_max_instance","")}")
+                start_str=dp.get("start","")
+                end_str=dp.get("end","")
+                instanceSize_str = dp.get("instanceSize","")
+                is_min_instance = dp.get("is_min_instance","")
+                is_max_instance=dp.get("is_max_instance","")
+                print(f"Start: {start_str}, End: {end_str}, Instance Size: {instanceSize_str}, isMinInstance: {is_min_instance}, isMaxInstance: {is_max_instance}")
 
 
     def add_table(self, data_list, columns,columns_name=None,col_size_diff={},size=4,line=1):

@@ -6,10 +6,9 @@ import time
 import zlib
 
 import aiofile
-import gzip
 from aiofile import async_open
 
-from sl_async.slapi import  SlSource, SourceFilter,SlDest, DefaultSourceFilter
+from sl_async.slapi import SlSource, SourceFilter, SlDest, DefaultSourceFilter
 from sl_json.json import get_time_from_line
 
 reader_log = logging.getLogger("BufferedGzipReader")
@@ -174,7 +173,8 @@ class BufferedGzipWriter(SlDest):
         await self.file.write(compressed_data)
         # Write the Gzip footer (CRC32 and input size)
         await self._build_gzip_footer()
-        writer_log.info(f"All writes to {self.get_path()} finished")
+        path_str=self.get_path()
+        writer_log.info(f"All writes to {path_str} finished")
     async def _flush_buffer(self):
         if self.buffer.tell() > 0:
             # Compress the buffer contents

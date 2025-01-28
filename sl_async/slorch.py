@@ -25,7 +25,8 @@ def extract_slow_queries_from_file(
         chunk_size=200000,
         save_by_chunk="none",
         display_at=200000):
-    parquet_file_path_base=f"{remove_extension(output_file_path)}/"
+    output_file_path_without_ext=remove_extension(output_file_path)
+    parquet_file_path_base=f"{output_file_path_without_ext}/"
 
     file_name = os.path.basename(log_file_path)
     file_name_without_extension = os.path.splitext(file_name)[0]
@@ -132,8 +133,15 @@ class AsyncExtractAndAggregate:
                             self.lastPrint=self.result["countOfSlow"]
                             end_time = time.time()
                             elapsed_time_ms = (end_time - start_time) * 1000
-                            logging.info(f"loaded {self.result["countOfSlow"]} slow queries in {convertToHumanReadable("Millis",elapsed_time_ms)} it={it}"+
-                                         f" Q={self.source.get_queue().qsize()}|{self.queue_decoded.qsize()}|{self.dest.queue_size()} {int(round(self.result["countOfSlow"]/(elapsed_time_ms/1000)))}SQPS")
+
+                            countOfSlow = self.result["countOfSlow"]
+                            millis_str=convertToHumanReadable("Millis",elapsed_time_ms)
+                            src_qsize_str=self.source.get_queue().qsize()
+                            dec_qsize_str=self.queue_decoded.qsize()
+                            dest_qsize_str=self.dest.queue_size()
+                            speed=int(round(self.result["countOfSlow"]/(elapsed_time_ms/1000)))
+                            logging.info(f"loaded {countOfSlow} slow queries in {millis_str} it={it}"+
+                                         f" Q={src_qsize_str}|{dec_qsize_str}|{dest_qsize_str} {speed}SQPS")
                     data.append(log_entry)
                     if log_entry:
                         await self.dest.write(orig_line)
@@ -155,12 +163,16 @@ class AsyncExtractAndAggregate:
             future.result()
         end_time = time.time()
         elapsed_time_ms = (end_time - start_waiting) * 1000
-        logging.info(f"waiting for last pool took {convertToHumanReadable("Millis",elapsed_time_ms)}")
+        millis_str=convertToHumanReadable("Millis",elapsed_time_ms)
+        logging.info(f"waiting for last pool took {millis_str}")
         self.pool.shutdown(wait=True)
         self.write_result()
         end_time = time.time()
         elapsed_time_ms = (end_time - start_time) * 1000
-        logging.info(f"Extracted {self.result["countOfSlow"]} slow queries have been saved to {self.dest.get_path()} and {self.parquet_file_path_base} in {convertToHumanReadable("Millis",elapsed_time_ms)}")
+        countOfSlow=self.result["countOfSlow"]
+        dest_path=self.dest.get_path()
+        millis_str=convertToHumanReadable("Millis",elapsed_time_ms)
+        logging.info(f"Extracted {countOfSlow} slow queries have been saved to {dest_path} and {self.parquet_file_path_base} in {millis_str}")
 
 
     async def internal(self):
