@@ -3,12 +3,22 @@
 
 -----------------------------
 ## Disclaimer
-This software is a personal analysis experiment and is NOT related to MongoDB, Inc. It is not covered by any commercial support subscriptions or services from MongoDB, Inc. Use of slowInvest is at your own risk.
+This software is a personal analysis experiment and is NOT related to MongoDB, Inc.
+It is not covered by any commercial support subscriptions or services from MongoDB, Inc.
+Use of slowInvest is at your own risk.
 
 -----------------------------
 ## Purpose
-This project is an experimental collection of Python scripts that simplify the review of slow queries by grouping them according to query shape and categorizing them.
+This project is an experimental set of Python scripts designed to streamline the analysis
+of slow queries by organizing them based on query shape and categorizing them accordingly.
+The project is being expanded to include new features such as a configuration report,
+scaling event analysis, an alert section, and customizable alerts specifically for scaling issues.
 
+-----------------------------
+## Prerequisite
+
+* Requires Python 3.13 or later.
+* May work with Python 3.11 or later. 
 -----------------------------
 ## Usage
 
@@ -90,3 +100,14 @@ These configurations determine the behavior and functionality of the data retrie
 Each configuration option can be overridden in the application's configuration file.
 
 -----------------------------
+python finalSlowInvest --server
+
+The --server option launches the program as a web server, providing a web-based interface.
+
+Command: python finalSlowInvest --server
+
+### Command: `python finalSlowInvest --server`
+
+#### Description
+
+The --server option launches the program as a web server, providing a web-based interface.
