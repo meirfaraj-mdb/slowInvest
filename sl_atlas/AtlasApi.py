@@ -1,11 +1,14 @@
 import concurrent
 import logging
 import re
+import time
+from datetime import datetime
 
 import msgspec
 import requests
 from requests.auth import HTTPDigestAuth
 
+import sl_utils.utils
 from sl_async.gzip import BufferedGzipWriter
 from sl_async.slatlas import BufferedSlAtlasSource
 from sl_async.slorch import AsyncExtractAndAggregate
@@ -15,6 +18,8 @@ atlas_logging = logging.getLogger("atlas")
 atlas_logging.setLevel(logging.DEBUG)
 
 decoder = msgspec.json.Decoder()
+encoder = msgspec.json.Encoder()
+
 def convert_list_to_dict(databases):
     """
     Converts a list of database names into a dictionary with each database name
@@ -610,6 +615,8 @@ class AtlasApi():
         processes_by_cluster = {}
         for cluster in clusters.get('results',[]):
             cluster_name=cluster.get('name')
+            cluster["loadedFromApi"]=True
+            cluster["freshness"]=time.time()
             cluster["future"]={}
             if full:
                 cluster["future"]["performanceAdvisorSuggestedIndexes"] = pool.submit(self.getPerformanceAdvisorSuggestedIndexes,group_id,cluster_name)
@@ -709,17 +716,50 @@ class AtlasApi():
         else:
             cluster[f"{name}_configured"]="True" if len(cluster[name])>0 else "False"
             cluster[f"{name}_count"]=len(cluster[name])
-
         del cluster["future"][name]
 
 
     def update_cluster_future_result(self,cluster):
         keys=list(cluster.get("future",{}).keys())
+        name = cluster.get("name","")
+        atlas_logging.debug(f"Getting results for cluster {name} for futures {keys}")
         for key in keys:
             self.update_one_future(cluster,key)
         if "future" in cluster:
             del cluster["future"]
 
+
+    def update_all_cluster_process_future_result(self,cluster):
+        name = cluster.get("name","")
+        atlas_logging.debug(f"Cluster {name} updating processes futures")
+
+
+
+    def save_cluster_result(self,cluster):
+        self.update_cluster_future_result(cluster)
+        name = cluster.get("name","")
+        if cluster["loadedFromApi"]:
+            atlas_logging.debug(f"Cluster {name} data where loaded from API need to save them")
+            clusterCopy = {}
+            exclude=["future","processes"]
+            for key in cluster:
+                if key in exclude:
+                    atlas_logging.debug(f"Cluster {name} will NOT save {key}")
+                    continue
+                atlas_logging.debug(f"Cluster {name} will save {key}")
+                clusterCopy[key] = cluster[key]
+            # current date
+            name=cluster.get("name")
+            current_date = datetime.now()
+            # Format the date as a string in the format YYYYMMDD
+            date_str = current_date.strftime("%Y%m%d")
+            baseClusterPath=f"{self.config.OUTPUT_FILE_PATH}/{name}/conf/"
+            baseClusterWDatePath=f"{baseClusterPath}/{date_str}/"
+            baseClusterWDateFilePath=f"{baseClusterWDatePath}/cluster.json"
+            createDirs(baseClusterWDatePath)
+
+            with open(baseClusterWDateFilePath, 'wb') as clusterFile:
+                clusterFile.write(encoder.encode(clusterCopy))
 
     def get_database_composition_for_process(self,cluster,process):
         #         for cluster_name, shards in processes_by_cluster.items():

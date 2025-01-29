@@ -193,7 +193,7 @@ def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
     if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
         report = Report(config.get_report_formats())
         report.addpage()
-    atlasApi.update_cluster_future_result(cluster)
+    atlasApi.save_cluster_result(cluster)
     cluster["scaling"]=allScallingEvt.get(cluster.get("name"),[])
     processesShard = cluster.get("processes", {})
     with concurrent.futures.ProcessPoolExecutor() as pool:
