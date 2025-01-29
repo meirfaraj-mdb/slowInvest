@@ -145,7 +145,6 @@ def display_cluster(config,report,cluster):
 def atlas_retrieval_mode(config,report):
     atlasApi = AtlasApi(config)
 
-    allScallingEvt= atlasApi.getAutoScalingEvent(config.GROUP_ID,cluster_names=None)
 
     if config.ATLAS_RETRIEVAL_SCOPE == "project":
         print(f"Get project {config.GROUP_ID} composition....")
@@ -155,7 +154,7 @@ def atlas_retrieval_mode(config,report):
         millis_str=convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)
         print(f"Received project {config.GROUP_ID} composition in {millis_str}")
         for cluster in compositions :
-            generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report)
+            generate_cluster_report(atlasApi, cluster, config, report)
 
 
     elif config.ATLAS_RETRIEVAL_SCOPE == "clusters":
@@ -167,7 +166,7 @@ def atlas_retrieval_mode(config,report):
             millis_str=convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)
             print(f"Received cluster {cluster_name} composition in {millis_str}")
             for cluster in compositions :
-                generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report)
+                generate_cluster_report(atlasApi, cluster, config, report)
 
     else: #processId
         for process in config.PROCESSES_ID:
@@ -189,12 +188,11 @@ def remove_status_suffix(text):
         return text
 
 
-def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
+def generate_cluster_report(atlasApi, cluster, config, report):
     if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
         report = Report(config.get_report_formats())
         report.addpage()
     atlasApi.save_cluster_result(cluster)
-    cluster["scaling"]=allScallingEvt.get(cluster.get("name"),[])
     processesShard = cluster.get("processes", {})
     with concurrent.futures.ProcessPoolExecutor() as pool:
         results={}
@@ -207,8 +205,11 @@ def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
                 results[processes.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, processes.get("id", ""),shard_num,path,config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK)
                 continue
             primary = processes.get("primary", {})
+            if len(primary) ==0:
+                logging.error("no primary found")
+                continue
             #atlasApi.get_database_composition_for_process(cluster, primary)
-            type_without_sfx=remove_status_suffix(primary.get("typeName"))
+            type_without_sfx=remove_status_suffix(primary.get("typeName",""))
             hostname=primary.get("hostname")
             path=f"{config.OUTPUT_FILE_PATH}/{name}/{type_without_sfx}/{shard_num}/{hostname}/"
             results[primary.get("id", "")]=pool.submit(atlasApi.retrieveLast24HSlowQueriesFromCluster,config.GROUP_ID, primary.get("id", ""),shard_num,
@@ -242,6 +243,9 @@ def generate_cluster_report(atlasApi, cluster, config,allScallingEvt, report):
             primary = processes.get("primary", {})
             #atlasApi.get_database_composition_for_process(cluster, primary)
             primary_id=primary.get("id", "")
+            if len(primary) ==0:
+                logging.error("no primary found")
+                continue
             type_without_sfx=remove_status_suffix(primary.get("typeName", ""))
             addToReport(
                 results[primary.get("id", "")].result(),

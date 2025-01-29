@@ -1,5 +1,6 @@
 import logging
 
+from django.contrib.messages import success
 from fpdf import *
 from fpdf.enums import XPos,YPos
 
@@ -388,20 +389,16 @@ class PDFReport(FPDF,AbstractReport):
                 self.display_line(col_width,row_height,line[0],connectionStrings.get(line[1],None))
         scaling=cluster.get("scaling",[])
         if len(scaling)>0:
+            self.add_page()
             self.subChapter_title("Scaling information "+cluster.get("name",""))
-            col_diff={'id':6,'created':2,'scal_type':-8,'raw.originalCostPerHour':-4,'raw.newCostPerHour':-4,'raw.isAtMaxCapacityAfterAutoScale':8}
-            for scal in scaling:
-                scal["scal_type"]="COMPUTE" if scal.get('eventTypeName',"").startswith("COMPUTE") else "DISK"
+            col_diff={'id':15,'created':8,'scal_type':-4,"scal_succeed":-8,"scal_fail_cause":5,'raw.originalCostPerHour':-4,'raw.newCostPerHour':-4,'raw.originalDiskSizeGB':-4,'raw.newDiskSizeGB':-4,'raw.originalInstanceSize':-10, 'raw.newInstanceSize':-10,'raw.isAtMaxCapacityAfterAutoScale':-5}
             self.add_table(scaling,
-                   ['id','created','scal_type','raw.originalCostPerHour','raw.newCostPerHour', 'raw.originalDiskSizeGB','raw.newDiskSizeGB','raw.originalInstanceSize', 'raw.newInstanceSize','raw.isAtMaxCapacityAfterAutoScale'],
-                   ['id','time','scale type','orig Cost/Hour','new Cost/Hour', 'orig DiskSizeGB','new DiskSizeGB','orig instance', 'new instance','@MaxCapacityAfterAutoScale'],
+                   ['id','created','scal_type',"scal_succeed","scal_fail_cause",'raw.originalCostPerHour','raw.newCostPerHour', 'raw.originalDiskSizeGB','raw.newDiskSizeGB','raw.originalInstanceSize', 'raw.newInstanceSize','raw.isAtMaxCapacityAfterAutoScale'],
+                   ['id','time','scale type',"success","fail cause",'orig Cost/H','new Cost/H', 'orig DiskGB','new DiskGB','orig T', 'new T','@MaxAfter'],
                            col_diff,5)
             self.subChapter_title("Scaling Details"+cluster.get("name",""))
-            for scal in scaling:
-                computeAutoScaleTriggers=scal.get('raw',{}).get("computeAutoScaleTriggers",[])
-                if computeAutoScaleTriggers is None or len(computeAutoScaleTriggers)==0:
-                    computeAutoScaleTriggers=""
-                scal["compute_auto_scaling_triggers"]=scal.get('computeAutoScalingTriggers',"")+"\n"+str(computeAutoScaleTriggers)
+
+
             col_diff={'id':-75,"compute_auto_scaling_triggers":75}
             self.add_table(scaling,
                            ['id', 'compute_auto_scaling_triggers'],
@@ -426,6 +423,28 @@ class PDFReport(FPDF,AbstractReport):
                 is_min_instance = dp.get("is_min_instance","")
                 is_max_instance=dp.get("is_max_instance","")
                 print(f"Start: {start_str}, End: {end_str}, Instance Size: {instanceSize_str}, isMinInstance: {is_min_instance}, isMaxInstance: {is_max_instance}")
+
+        custom_alert=cluster.get("custom_alert", {})
+        if len(custom_alert) > 0:
+            self.add_page()
+            self.subChapter_title("Custom alert for "+cluster.get("name",""))
+            scaling_alert=custom_alert.get("scaling",{})
+            if len(scaling_alert) > 0:
+                self.sub2Chapter_title("Scaling alert for "+cluster.get("name",""))
+                alerts=[]
+
+                keys=scaling_alert.keys()
+                for key in keys:
+                    value = scaling_alert.get(key,{})
+                    al={}
+                    al["type"]=key
+                    al["details"]=value
+                    alerts.append(al)
+                self.add_table(alerts,
+                           ['type', 'details.count'],
+                           ['type','count'],
+                               {},8)
+        self.add_page()
 
 
     def add_table(self, data_list, columns,columns_name=None,col_size_diff={},size=4,line=1):

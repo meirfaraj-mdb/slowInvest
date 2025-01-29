@@ -624,6 +624,7 @@ class AtlasApi():
                 cluster["future"]["backupCompliance"] = pool.submit(self.getBackupCompliance,group_id)
                 cluster["future"]["backup_snapshot"] = pool.submit(self.listAllBackupSnapshotForCluster,group_id,cluster_name,cluster["clusterType"])
                 cluster["future"]["advancedConfiguration"] = pool.submit(self.getAdvancedConfigurationForOneCluster,group_id, cluster_name)
+                cluster["future"]["scaling"] = pool.submit(self.getAutoScalingEvent,group_id,[cluster_name])
 
             replicationSpecs = cluster.get('replicationSpecs',None)
             providersSet = set()
@@ -700,8 +701,42 @@ class AtlasApi():
                     cluster_name_to_inf[cluster_name.lower()]["processes"]=processes_by_cluster[cluster_name]
         return result
 
+    def extract_failure_cause(self,event_type):
+        switch_case = {
+            "COMPUTE_AUTO_SCALE_SCALE_DOWN_FAIL_BASE": "SCALE_DOWN",
+            "COMPUTE_AUTO_SCALE_SCALE_DOWN_FAIL_ANALYTICS": "SCALE_DOWN_A",
+            "COMPUTE_AUTO_SCALE_MAX_INSTANCE_SIZE_FAIL_BASE": "MAX_INSTANCE_SIZE",
+            "COMPUTE_AUTO_SCALE_MAX_INSTANCE_SIZE_FAIL_ANALYTICS": "MAX_INSTANCE_SIZE_A",
+            "DISK_AUTO_SCALE_MAX_DISK_SIZE_FAIL": "MAX_DISK_SIZE_FAIL",
+            "COMPUTE_AUTO_SCALE_OPLOG_FAIL_BASE": "OPLOG_FAIL_BASE",
+            "COMPUTE_AUTO_SCALE_OPLOG_FAIL_ANALYTICS": "OPLOG_FAIL_A",
+            "DISK_AUTO_SCALE_OPLOG_FAIL": "OPLOG_FAIL"
+        }
+        # Return the matching failure cause or an empty string if not found
+        return switch_case.get(event_type, '')
+    def update_scaling_alert(self,cluster):
+        scaling=cluster.get("scaling",[])
+        for scal in scaling:
+            eventTypeName=scal.get('eventTypeName',"")
+            scal["scal_type"]="COMPUTE" if eventTypeName.startswith("COMPUTE") else "DISK"
+            scal["scal_succeed"]="_FAIL" not in eventTypeName
+            scal["scal_fail_cause"]=self.extract_failure_cause(eventTypeName)
+            if not scal["scal_succeed"]:
+                custom_alert=cluster["custom_alert"]=cluster.get("custom_alert",{})
+                scaling_alert=custom_alert["scaling"]=custom_alert.get("scaling",{})
+                cause=scal["scal_fail_cause"]
+                cur=scaling_alert[cause] = scaling_alert.get(cause,{})
+                cur["count"]=cur.get("count",0)+1
+                cur["times"]=cur.get("times",[])
+                cur["times"].append(scal.get("created",""))
+            computeAutoScaleTriggers=scal.get('raw',{}).get("computeAutoScaleTriggers",[])
+            if computeAutoScaleTriggers is None or len(computeAutoScaleTriggers)==0:
+                computeAutoScaleTriggers=""
+            scal["compute_auto_scaling_triggers"]=scal.get('computeAutoScalingTriggers',"")+"\n"+str(computeAutoScaleTriggers)
+
     def update_one_future(self,cluster,name):
-        atlas_logging.debug(f"updating future {name}")
+        cluster_name = cluster.get("name","")
+        atlas_logging.debug(f"cluster {cluster_name} updating future {name}")
         future = cluster.get("future",{}).get(name,None)
         if future is None:
             atlas_logging.debug(f"future {name} not found")
@@ -709,6 +744,9 @@ class AtlasApi():
         concurrent.futures.as_completed(future)
         try:
             cluster[name]=future.result()
+            if name in ["scaling"]:
+                cluster[name]=cluster[name].get(cluster_name,[])
+                self.update_scaling_alert(cluster)
         except Exception as exc:
             atlas_logging.debug(f"failed to retrieve the {name} : {exc}")
             cluster[f"{name}_configured"]="Fail to retrieve"
