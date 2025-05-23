@@ -1,12 +1,10 @@
 import logging
 
-from django.contrib.messages import success
 from fpdf import *
 from fpdf.enums import XPos,YPos
 
 from sl_report.report import AbstractReport
 from sl_utils.utils import *
-import concurrent
 import msgspec
 
 from datetime import datetime

@@ -41,7 +41,7 @@ class BufferedGzipReader(SlSource):
                 buffer = lines[-1]  # Retain any incomplete line in the buffer
                 for line in lines[:-1]:
                     await self.line_filter.process(line.decode('utf-8'))
-                dtime = get_time_from_line(lines[-2])
+              #  dtime = get_time_from_line(lines[-2])
 
         # Flush any remaining data in the decompressor
             try:

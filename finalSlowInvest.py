@@ -332,14 +332,14 @@ if __name__ == "__main__":
     report = Report(config.get_report_formats())
     report.addpage()
 
-    if config.RETRIEVAL_MODE == "Atlas":
+    if config.retrieval_mode == "Atlas":
         atlas_retrieval_mode(config,report)
-    elif config.RETRIEVAL_MODE == "files":
+    elif config.retrieval_mode == "files":
         file_retrieval_mode(config,report)
-    elif config.RETRIEVAL_MODE == "OpsManager":
-        print(f"Retrieval Mode: {config.RETRIEVAL_MODE} not yet implemented use files mode instead.")
+    elif config.retrieval_mode == "OpsManager":
+        print(f"Retrieval Mode: {config.retrieval_mode} not yet implemented use files mode instead.")
     else:
-        raise ValueError(f"Unsupported RETRIEVAL_MODE: {config.RETRIEVAL_MODE}")
+        raise ValueError(f"Unsupported retrieval_mode: {config.retrieval_mode}")
 
     if not config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
         report.write(f"{config.REPORT_FILE_PATH}/slow_report")

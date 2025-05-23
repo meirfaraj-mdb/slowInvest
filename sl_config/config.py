@@ -36,7 +36,7 @@ class Config():
         else:
             self.config = load_config("config/config.json")
         # Atlas / files / OpsManager
-        self.RETRIEVAL_MODE = self.config.get('RETRIEVAL_MODE', 'files')
+        self.retrieval_mode = self.config.get('retrieval_mode', 'files')
         # Atlas/Ops Manager related
         self.PUBLIC_KEY = self.config.get('PUBLIC_KEY',None)
         self.PRIVATE_KEY = self.config.get('PRIVATE_KEY',None)
@@ -81,14 +81,14 @@ class Config():
             matplotlib.use("cairo")
         else:
             matplotlib.use("svg")
-        if self.RETRIEVAL_MODE == "Atlas":
-            print(f"Retrieval Mode: {self.RETRIEVAL_MODE} with pub key:{self.PUBLIC_KEY}")
-        elif self.RETRIEVAL_MODE == "files":
-            print(f"Retrieval Mode: {self.RETRIEVAL_MODE} with input_path : {self.INPUT_PATH}  logs:{self.LOGS_FILENAME}")
-        elif self.RETRIEVAL_MODE == "OpsManager":
-            print(f"Retrieval Mode: {self.RETRIEVAL_MODE} with pub key:{self.PUBLIC_KEY}")
+        if self.retrieval_mode == "Atlas":
+            print(f"Retrieval Mode: {self.retrieval_mode} with pub key:{self.PUBLIC_KEY}")
+        elif self.retrieval_mode == "files":
+            print(f"Retrieval Mode: {self.retrieval_mode} with input_path : {self.INPUT_PATH}  logs:{self.LOGS_FILENAME}")
+        elif self.retrieval_mode == "OpsManager":
+            print(f"Retrieval Mode: {self.retrieval_mode} with pub key:{self.PUBLIC_KEY}")
         else:
-            raise ValueError(f"Unsupported RETRIEVAL_MODE: {self.RETRIEVAL_MODE}")
+            raise ValueError(f"Unsupported retrieval_mode: {self.retrieval_mode}")
         gc.collect(2)
         gc.freeze()
         allocs,gen1,gen2=gc.get_threshold()
