@@ -70,7 +70,7 @@ def extractSlowQueryInfos(log_entry,source,shard):
     attr = log_entry.get('attr', {})
 
     namespace = attr.get("ns", "unknown")
-    excluded_prefixes=('admin', 'local', 'config')
+    excluded_prefixes=('admin.', 'local.', 'config.')
     if namespace.startswith(excluded_prefixes):
         return None
 
@@ -266,6 +266,7 @@ def extractSlowQueryInfos(log_entry,source,shard):
     if command_shape == 0:
         command_shape = "no_command"
 
+    excluded_prefixes=('admin', 'local', 'config')
     if db.startswith(excluded_prefixes):
         return None
 

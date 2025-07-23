@@ -1,5 +1,5 @@
 import gc
-import os
+import matplotlib.style as mplstyle
 import matplotlib
 import msgspec
 import logging
@@ -81,6 +81,7 @@ class Config():
             matplotlib.use("cairo")
         else:
             matplotlib.use("svg")
+            mplstyle.use('fast')
         if self.retrieval_mode == "Atlas":
             print(f"Retrieval Mode: {self.retrieval_mode} with pub key:{self.PUBLIC_KEY}")
         elif self.retrieval_mode == "files":

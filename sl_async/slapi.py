@@ -113,7 +113,7 @@ class DefaultSourceFilter(SourceFilter):
                  filter_list=None,
                  min_size=20):
         super().__init__(queue)
-        self.filter_list= ['Slow query'] if filter_list is None else filter_list
+        self.filter_list= ['"msg":"Slow query"'] if filter_list is None else filter_list
         self.min_size=min_size
 
     async def process(self, line):

@@ -1,5 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
+from concurrent.futures.process import ProcessPoolExecutor
+
 from matplotlib import pyplot as plt
 import matplotlib
 import logging
@@ -57,10 +59,11 @@ def plot_stats(config, df, value_col, title, ylabel, xlabel='Time', output_file=
     return file_paths
 
 
+
 def parallel_plot_tasks(plot_args_list):
     """Run multiple plot tasks in parallel and collect their results."""
     results = []
-    with ThreadPoolExecutor() as executor:
+    with ProcessPoolExecutor() as executor:
         future_to_args = {executor.submit(plot_stats, *args): args for args in plot_args_list}
         for future in future_to_args:
             try:
@@ -68,6 +71,7 @@ def parallel_plot_tasks(plot_args_list):
                 results.append((future_to_args[future], result))
             except Exception as e:
                 print(f"An error occurred while processing: {e}")
+        executor.shutdown()
     return results
 
 def aggregateForGraph(df,groupByConditions):
@@ -185,10 +189,10 @@ def createAndInsertGraphs(config, prefix, report, result):
 
     # Step 2: Integrate all generated graphs into the report in order
     for args,file_paths in plot_results:
-        if file_paths and len(file_paths)==0:
+        if (file_paths is not None and len(file_paths)==0) or (file_paths is None):
            if report:
-              report.chapter_body(f"No {args[3]} to present as graph")
-
+                report.chapter_body(f"No {args[3]} to present as graph")
+           continue
         if report:
             report.addpage()
             report.sub2Chapter_title(args[3])
