@@ -99,6 +99,34 @@ These configurations determine the behavior and functionality of the data retrie
 
 Each configuration option can be overridden in the application's configuration file.
 
+### Template option
+
+Using Custom Templates for Personalized Reports
+You can now use a template to generate a personalized report.
+Documentation for the fields and titles that can be overridden is available here : [Template Documentation](template_doc.md)
+
+
+Default and Custom Templates
+The default template is located at:
+
+/config/default/template.json  
+To create your own template:
+
+Place your template file under:
+/config/templates/  
+Reference the template by its name (without the .json extension) in your configuration, like so:
+"template": "template_name"
+
+(For example, to use audit_report.json, set "template": "audit_report")
+Examples
+Example template:
+/config/templates/audit_report.json  
+Example configuration using the custom template:
+/config/audit_report.json
+
+
+
+
 -----------------------------
 python finalSlowInvest --server
 
