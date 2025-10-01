@@ -65,9 +65,10 @@ class AbstractReport(ABC):
 
 class Report(AbstractReport):
 
-    def __init__(self,reports):
+    def __init__(self,config):
         self.reports=[]
-        for report in reports:
+        reports_name = config.get_report_formats()
+        for report in reports_name:
             module_name = f"sl_report.{report}_report"
             report_up=report.upper()
             class_name = f"{report_up}Report"
@@ -76,9 +77,11 @@ class Report(AbstractReport):
                 # Dynamically import the module and class
                 module = importlib.import_module(module_name)
                 report_class = getattr(module, class_name)
-                self.reports.append(report_class("Slow Query Report"))
+                self.reports.append(report_class(config))
             except (ModuleNotFoundError, AttributeError) as e:
                 reports_logging.error(f"Error: {report} report implementation is not available.",e)
+        if config.get_template("initial_empty_page",True) :
+            self.addpage()
 
 
     def header(self):

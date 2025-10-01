@@ -13,6 +13,18 @@ pdf_reports_logging = logging.getLogger("pdf_reports")
 pdf_reports_logging.setLevel(logging.DEBUG)
 
 decoder = msgspec.json.Decoder()
+def get_nested_value(d, key):
+    """
+    d : dict
+    key : string, ex 'prop.subprop'
+    """
+    keys = key.split('.')
+    for k in keys:
+        if isinstance(d, dict) and k in d:
+            d = d[k]
+        else:
+            return None
+    return d
 
 def create_instance_size_timeline(events):
     # Sort events by their creation time
@@ -128,67 +140,69 @@ def render_toc(pdf, outline):
 
 
 class PDFReport(FPDF,AbstractReport):
-    def __init__(self, header_txt):
+    def __init__(self, config):
         super().__init__(orientation='P',unit='mm',format='A4')
+        self.config = config
         self.isCover = False
-        self.headerTxt = header_txt
+        self.headerTxt = config.get_template("title","Slow Query Report")
         self.add_page()
-        self.insert_toc_placeholder(render_toc, allow_extra_pages=True)
+        if config.get_template("include_toc",True) :
+            self.insert_toc_placeholder(render_toc, allow_extra_pages=True)
         self.set_section_title_styles(
             # Level 0 titles:
             TextStyle(
-                font_family="Times",
-                font_style="B",
-                font_size_pt=16,
-                color=128,
-                underline=True,
-                t_margin=0,
-                l_margin=2,
-                b_margin=0,
+                font_family=config.get_template("format.title.level_0.font_family","Times") ,
+                font_style=config.get_template("format.title.level_0.font_style","B") ,
+                font_size_pt=config.get_template("format.title.level_0.font_size_pt",16),
+                color=config.get_template("format.title.level_0.color",128),
+                underline=config.get_template("format.title.level_0.underline",True),
+                t_margin=config.get_template("format.title.level_0.t_margin",0),
+                l_margin=config.get_template("format.title.level_0.l_margin",2),
+                b_margin=config.get_template("format.title.level_0.b_margin",0),
             ),
             # Level 1 subtitles:
             TextStyle(
-                font_family="Times",
-                font_style="B",
-                font_size_pt=14,
-                color=128,
-                underline=True,
-                t_margin=0,
-                l_margin=10,
-                b_margin=0,
+                font_family=config.get_template("format.title.level_1.font_family","Times") ,
+                font_style=config.get_template("format.title.level_1.font_style","B") ,
+                font_size_pt=config.get_template("format.title.level_1.font_size_pt",14),
+                color=config.get_template("format.title.level_1.color",128),
+                underline=config.get_template("format.title.level_1.underline",True),
+                t_margin=config.get_template("format.title.level_1.t_margin",0),
+                l_margin=config.get_template("format.title.level_1.l_margin",10),
+                b_margin=config.get_template("format.title.level_1.b_margin",0),
             ),
             # Level 2 subtitles:
             TextStyle(
-                font_family="Times",
-                font_style="B",
-                font_size_pt=12,
-                color=128,
-                underline=True,
-                t_margin=0,
-                l_margin=4,
-                b_margin=0,
+                font_family=config.get_template("format.title.level_2.font_family","Times") ,
+                font_style=config.get_template("format.title.level_2.font_style","B") ,
+                font_size_pt=config.get_template("format.title.level_2.font_size_pt",12),
+                color=config.get_template("format.title.level_2.color",128),
+                underline=config.get_template("format.title.level_2.underline",True),
+                t_margin=config.get_template("format.title.level_2.t_margin",0),
+                l_margin=config.get_template("format.title.level_2.l_margin",4),
+                b_margin=config.get_template("format.title.level_2.b_margin",0),
             ),
             # Level 3 subtitles:
             TextStyle(
-                font_family="Times",
-                font_style="B",
-                font_size_pt=8,
-                color=128,
-                underline=True,
-                t_margin=0,
-                l_margin=6,
-                b_margin=0,
+                font_family=config.get_template("format.title.level_3.font_family","Times") ,
+                font_style=config.get_template("format.title.level_3.font_style","B") ,
+                font_size_pt=config.get_template("format.title.level_3.font_size_pt",8),
+                color=config.get_template("format.title.level_3.color",128),
+                underline=config.get_template("format.title.level_3.underline",True),
+                t_margin=config.get_template("format.title.level_3.t_margin",0),
+                l_margin=config.get_template("format.title.level_3.l_margin",6),
+                b_margin=config.get_template("format.title.level_3.b_margin",0),
             ),
             # Level 4 subtitles:
             TextStyle(
-                font_family="Times",
-                font_style="",
-                font_size_pt=4,
-                color=128,
-                underline=True,
-                t_margin=0,
-                l_margin=8,
-                b_margin=0,
+                font_family=config.get_template("format.title.level_4.font_family","Times") ,
+                font_style=config.get_template("format.title.level_4.font_style","") ,
+                font_size_pt=config.get_template("format.title.level_4.font_size_pt",4),
+                color=config.get_template("format.title.level_4.color",128),
+                underline=config.get_template("format.title.level_4.underline",True),
+                t_margin=config.get_template("format.title.level_4.t_margin",0),
+                l_margin=config.get_template("format.title.level_4.l_margin",8),
+                b_margin=config.get_template("format.title.level_4.b_margin",0),
             ),
         )
 
@@ -270,110 +284,116 @@ class PDFReport(FPDF,AbstractReport):
         self.cell(col_width+55, row_height, convertToHumanReadable(dispName,value), border=1)
         self.ln(row_height)
 
-    def display_cluster_table(self,cluster):
-        self.add_page()
-        name=cluster.get('name')
-        self.chapter_title(f"Cluster {name} report")
-        self.subChapter_title(f"General")
+    def display_cluster_table_general(self,cluster):
+        if not self.config.get_template("sections.config.general.include",True) :
+            return
+        self.subChapter_title(self.config.get_template("sections.config.general.title","General"))
+        self.set_font('helvetica', 'B', 8)
+        col_width = self.epw / 2
+        row_height = self.font_size * 1.5
+        displayCluster =self.config.get_fields_array("sections.config.general.fields")
+
+        for line in displayCluster:
+            self.display_line(col_width,row_height,line[0],cluster.get(line[1],None))
+
+
+    def display_cluster_table_advanced(self,cluster):
+        if not self.config.get_template("sections.config.advanced.include",True) :
+            return
         self.set_font('helvetica', 'B', 8)
         col_width = self.epw / 2
         row_height = self.font_size * 1.5
 
-        cluster["performanceAdvisorSuggestedIndexes_count"] = len(cluster["performanceAdvisorSuggestedIndexes"]
-                                                                  .get('content',{}).get('suggestedIndexes',[]))
-        displayCluster = [
-            ["Cluster Name",'name'],
-            ["Cluster Type",'clusterType'],
-            ["Create Date",'createDate'],
-            ["Feature Compatibility Version",'featureCompatibilityVersion'],
-            ["MongoDB Major Version", 'mongoDBMajorVersion'],
-            ["MongoDB Version",'mongoDBVersion'],
-            ["Version Release System",'versionReleaseSystem'],
-            ["Group/Project Id",'groupId'],
-            ["Cluster Id",'id'],
-            ["Backup Enabled",'backupEnabled'],
-            ["PIT Enabled",'pitEnabled'],
-            ["Paused",'paused'],
-            ["Termination Protection Enabled",'terminationProtectionEnabled'],
-            ["BI Connector",'biConnector'],
-            ["Tags",'tags'],
-            ["Labels",'labels'],
-            ["Config Server Management Mode",'configServerManagementMode'],
-            ["Config Server Type",'configServerType'],
-            ["Global Cluster Self Managed Sharding",'globalClusterSelfManagedSharding'],
-            ["Disk Warming Mode",'diskWarmingMode'],
-            ['Encryption At Rest Provider','encryptionAtRestProvider'],
-            ['Root Cert Type','rootCertType'],
-            ['Redact Client Log Data','redactClientLogData'],
-            ['Instance Composition','instance_composition'],
-            ['Providers','providers'],
-            ['Providers count','providers_count'],
-            ['Regions','regions'],
-            ['Regions count','regions_count'],
-            ["Backup Compliance configured","backupCompliance_configured"],
-            ["Backup snapshot count","backup_snapshot_count"],
-            ["Online Archive Count","onlineArchiveForOneCluster_count"],
-            ["Suggested Index Count","performanceAdvisorSuggestedIndexes_count"],
-        ]
-
-        for line in displayCluster:
-           self.display_line(col_width,row_height,line[0],cluster.get(line[1],None))
-        self.subChapter_title(f"Advanced configuration")
+        self.subChapter_title(self.config.get_template("sections.config.advanced.title","Advanced configuration"))
 
         advancedConfiguration = cluster.get('advancedConfiguration', {})
+        displayCluster =self.config.get_fields_array("sections.config.advanced.fields")
 
-        for k,v in advancedConfiguration.items():
-            self.display_line(col_width,row_height,k,v)
+        for line in displayCluster:
+            self.display_line(col_width,row_height,line[0],advancedConfiguration.get(line[1],None))
+
+    def display_cluster_table_backupCompliance(self,cluster):
+        if not self.config.get_template("sections.config.backup_compliance.include",True) :
+            return
+        self.set_font('helvetica', 'B', 8)
+        col_width = self.epw / 2
+        row_height = self.font_size * 1.5
 
         if cluster["backupCompliance_configured"] == "True":
-            self.subChapter_title(f"Backup compliance")
+            self.subChapter_title(self.config.get_template("sections.config.backup_compliance.title","Backup Compliance"))
             for k,v in cluster["backupCompliance"].items():
                 self.display_line(col_width,row_height,k,v)
+        #todo fields
 
+    def display_cluster_table_replication_prc_specs(self,type,region_elect,autoscaling):
+        if not self.config.get_template(f"sections.config.replication_specs.{type}.include",True) :
+            return
+        self.sub4Chapter_title(self.config.get_template(f"sections.config.replication_specs.{type}.title","Prc"))
+        node_count = region_elect.get('nodeCount',0)
+        if node_count > 0:
+            self.set_font('helvetica', 'B', 8)
+            col_width = self.epw / 2
+            row_height = self.font_size * 1.5
+            display_cluster =self.config.get_fields_array(f"sections.config.replication_specs.{type}.fields")
+            for line in display_cluster:
+                self.display_line(col_width,row_height,line[0],region_elect.get(line[1],None))
+            if autoscaling :
+                display_cluster =self.config.get_fields_array(f"sections.config.replication_specs.{type}.autoscaling.fields")
+                for line in display_cluster:
+                    self.display_line(col_width,row_height,line[0],get_nested_value(autoscaling, line[1]))
+
+    def display_cluster_table_replication_electable_specs(self,region_elect,autoscaling):
+        self.display_cluster_table_replication_prc_specs("electable_specs",region_elect,autoscaling)
+
+    def display_cluster_table_replication_read_only_specs(self,region_elect):
+        self.display_cluster_table_replication_prc_specs("read_only_specs",region_elect,None)
+
+    def display_cluster_table_replication_analytic_specs(self,region_elect,autoscaling):
+        self.display_cluster_table_replication_prc_specs("analytic_specs",region_elect,autoscaling)
+
+
+
+    def display_cluster_table_replication_specs(self,cluster):
+        if not self.config.get_template("sections.config.replication_specs.include",True) :
+            return
+
+        self.set_font('helvetica', 'B', 8)
+        col_width = self.epw / 2
+        row_height = self.font_size * 1.5
 
         replicationSpecs = cluster.get('replicationSpecs',None)
 
         if replicationSpecs is not None:
-           self.subChapter_title(f"Replication/cluster Spec")
-           idNum=0
-           for spec in replicationSpecs:
-               ext= "(Shard) " if cluster.get('clusterType') in ["SHARDED", "GEOSHARDED"] else ""
-               self.sub2Chapter_title(f"Replication Spec {ext}No {idNum} Id: {spec.get('id','')} Zone:{spec.get('zoneName','')}({spec.get('zoneId','')})")
-               regionConfigs=spec.get('regionConfigs',[])
-               regionNum=0
-               for regionConfig in regionConfigs:
-                   self.sub3Chapter_title(f"Region No {regionNum} {regionConfig.get('providerName','')} : Name: {regionConfig.get('regionName','')} Priority:{regionConfig.get('priority','')}")
-                   nodeCount = regionConfig.get('electableSpecs',{}).get('nodeCount',0)
-                   if nodeCount > 0:
-                       self.display_line(col_width,row_height,"Electable node specs",
-                                         regionConfig.get('electableSpecs',{}))
-                       self.display_line(col_width,row_height,"Electable Autoscaling",
-                                         regionConfig.get('autoScaling',{}))
-                   nodeCount = regionConfig.get('readOnlySpecs',{}).get('nodeCount',0)
-                   if nodeCount > 0:
-                       self.display_line(col_width,row_height,"read Only node specs",
-                                         regionConfig.get('readOnlySpecs',{}))
-                   nodeCount = regionConfig.get('analyticsSpecs',{}).get('nodeCount',0)
-                   if nodeCount > 0:
-                       self.display_line(col_width,row_height,"Analytics node specs",
-                                         regionConfig.get('analyticsSpecs',{}))
-                       self.display_line(col_width,row_height,"Analytics Autoscaling",
-                                         regionConfig.get('analyticsAutoScaling',{}))
-                   regionNum = regionNum + 1
-               processes = cluster.get('processes', None)
-               if processes is not None:
-                   shard_process=processes.get(idNum,{})
-                   primary = shard_process.get("primary",{})
-                   self.sub3Chapter_title(f"Primary Process")
-                   for k,v in primary.items():
+            self.subChapter_title(f"Replication/cluster Spec")
+            idNum=0
+            for spec in replicationSpecs:
+                ext= "(Shard) " if cluster.get('clusterType') in ["SHARDED", "GEOSHARDED"] else ""
+                self.sub2Chapter_title(f"Replication Spec {ext}No {idNum} Id: {spec.get('id','')} Zone:{spec.get('zoneName','')}({spec.get('zoneId','')})")
+                regionConfigs=spec.get('regionConfigs',[])
+                regionNum=0
+                for regionConfig in regionConfigs:
+                    self.sub3Chapter_title(f"Region No {regionNum} {regionConfig.get('providerName','')} : Name: {regionConfig.get('regionName','')} Priority:{regionConfig.get('priority','')}")
+                    self.display_cluster_table_replication_electable_specs(regionConfig.get("electableSpecs",{}),
+                                                                           regionConfig.get("autoScaling",None))
+                    self.display_cluster_table_replication_read_only_specs(regionConfig.get('readOnlySpecs',{}))
+                    self.display_cluster_table_replication_analytic_specs(regionConfig.get('analyticsSpecs',{}),
+                                                                          regionConfig.get("analyticsAutoScaling",None))
+
+                    regionNum = regionNum + 1
+                processes = cluster.get('processes', None)
+                if processes is not None:
+                    shard_process=processes.get(idNum,{})
+                    primary = shard_process.get("primary",{})
+                    self.sub3Chapter_title(f"Primary Process")
+                    for k,v in primary.items():
                         self.display_line(col_width,row_height,k,v)
-                   self.sub3Chapter_title(f"Others Process")
-                   others = shard_process.get("others",{})
-                   for proc in others:
-                       for k,v in proc.items():
-                           self.display_line(col_width,row_height,k,v)
-                       self.ln(4)
-               idNum=idNum+1
+                    self.sub3Chapter_title(f"Others Process")
+                    others = shard_process.get("others",{})
+                    for proc in others:
+                        for k,v in proc.items():
+                            self.display_line(col_width,row_height,k,v)
+                        self.ln(4)
+                idNum=idNum+1
         connectionStrings = cluster.get('connectionStrings',None)
         if connectionStrings is not None:
             self.subChapter_title(f"Connection Strings")
@@ -385,6 +405,25 @@ class PDFReport(FPDF,AbstractReport):
             ]
             for line in displayCluster:
                 self.display_line(col_width,row_height,line[0],connectionStrings.get(line[1],None))
+
+
+    def display_cluster_table(self,cluster):
+        if not self.config.get_template("sections.config.include",True) :
+            return
+        self.add_page()
+        name=cluster.get('name')
+        self.chapter_title(f"Cluster {name} report")
+        cluster["performanceAdvisorSuggestedIndexes_count"] = len(cluster["performanceAdvisorSuggestedIndexes"]
+                                                                  .get('content',{}).get('suggestedIndexes',[]))
+
+        self.display_cluster_table_general(cluster)
+
+        self.display_cluster_table_advanced(cluster)
+
+        self.display_cluster_table_backupCompliance(cluster)
+
+        self.display_cluster_table_replication_specs(cluster)
+
         scaling=cluster.get("scaling",[])
         if len(scaling)>0:
             self.add_page()

@@ -1,0 +1,448 @@
+{
+  "title" : "Slow Query Report",
+  "include_toc" : true,
+  "initial_empty_page" : true,
+  "format" :{
+    "title" : {
+      "level_0":{
+        "font_family":"Times",
+        "font_style":"B",
+        "font_size_pt":16,
+        "color":128,
+        "underline":true,
+        "t_margin":0,
+        "l_margin":2,
+        "b_margin":1
+      },
+      "level_1":{
+        "font_family":"Times",
+        "font_style":"B",
+        "font_size_pt":14,
+        "color":128,
+        "underline":true,
+        "t_margin":0,
+        "l_margin":10,
+        "b_margin":1
+      },
+      "level_2":{
+        "font_family":"Times",
+        "font_style":"B",
+        "font_size_pt":12,
+        "color":128,
+        "underline":true,
+        "t_margin":0,
+        "l_margin":4,
+        "b_margin":1
+      },
+      "level_3":{
+        "font_family":"Times",
+        "font_style":"B",
+        "font_size_pt":8,
+        "color":128,
+        "underline":true,
+        "t_margin":0,
+        "l_margin":6,
+        "b_margin":1
+      },
+      "level_4":{
+        "font_family":"Times",
+        "font_style":"",
+        "font_size_pt":5,
+        "color":128,
+        "underline":true,
+        "t_margin":0,
+        "l_margin":8,
+        "b_margin":1
+      }
+    }
+  },
+  "sections" : {
+    "config" : {
+      "include" : true,
+      "general" : {
+        "include" : true,
+        "title" : "General",
+        "fields" : {
+          "cluster_name" : {
+            "title" :"Cluster Name",
+            "path" : "name",
+            "include" : true
+          },
+          "cluster_type" : {
+            "title" :"Cluster Type",
+            "path" : "clusterType",
+            "include" : true
+          },
+          "create_date" : {
+            "title" :"Create Date",
+            "path" : "createDate",
+            "include" : true
+          },
+          "feature_compatibility_version" : {
+            "title" :"Feature Compatibility Version",
+            "path" : "featureCompatibilityVersion",
+            "include" : true
+          },
+          "mongodb_major_version" : {
+            "title" :"MongoDB Major Version",
+            "path" : "mongoDBMajorVersion",
+            "include" : true
+          },
+          "mongodb_version" : {
+            "title" :"MongoDB Version",
+            "path" : "mongoDBVersion",
+            "include" : true
+          },
+          "version_release_system" : {
+            "title" :"Version Release System",
+            "path" : "versionReleaseSystem",
+            "include" : true
+          },
+          "group_id" : {
+            "title" :"Group/Project Id",
+            "path" : "groupId",
+            "include" : true
+          },
+          "cluster_id" : {
+            "title" :"Cluster Id",
+            "path" : "id",
+            "include" : true
+          },
+          "paused" : {
+            "title" :"Paused",
+            "path" : "paused",
+            "include" : true
+          },
+          "termination_protection_enabled" : {
+            "title" :"Termination Protection Enabled",
+            "path" : "terminationProtectionEnabled",
+            "include" : true
+          },
+          "bi_connector" : {
+            "title" :"BI Connector",
+            "path" : "biConnector",
+            "include" : true
+          },
+          "tags" : {
+            "title" :"Tags",
+            "path" : "tags",
+            "include" : true
+          },
+          "labels" : {
+            "title" :"Labels",
+            "path" : "labels",
+            "include" : true
+          },
+          "config_server_management_mode" : {
+            "title" :"Config Server Management Mode",
+            "path" : "configServerManagementMode",
+            "include" : true
+          },
+          "config_server_type" : {
+            "title" :"Config Server Type",
+            "path" : "configServerType",
+            "include" : true
+          },
+          "global_cluster_self_managed_sharding" : {
+            "title" :"Global Cluster Self Managed Sharding",
+            "path" : "globalClusterSelfManagedSharding",
+            "include" : true
+          },
+          "disk_warming_mode" : {
+            "title" :"Disk Warming Mode",
+            "path" : "diskWarmingMode",
+            "include" : true
+          },
+          "encryption_at_rest_provider" : {
+            "title" :"Encryption At Rest Provider",
+            "path" : "encryptionAtRestProvider",
+            "include" : true
+          },
+          "root_cert_type" : {
+            "title" :"Root Cert Type",
+            "path" : "rootCertType",
+            "include" : true
+          },
+          "redact_client_log_data" : {
+            "title" :"Redact Client Log Data",
+            "path" : "redactClientLogData",
+            "include" : true
+          },
+          "instance_composition" : {
+            "title" :"Instance Composition",
+            "path" : "instance_composition",
+            "include" : true
+          },
+          "Providers" : {
+            "title" :"Providers",
+            "path" : "providers",
+            "include" : true
+          },
+          "providers_count" : {
+            "title" :"Providers count",
+            "path" : "providers_count",
+            "include" : true
+          },
+          "regions" : {
+            "title" :"Regions",
+            "path" : "regions",
+            "include" : true
+          },
+          "regions_count" : {
+            "title" :"Regions count",
+            "path" : "regions_count",
+            "include" : true
+          },
+          "backup_enabled" : {
+            "title" :"Backup Enabled",
+            "path" : "backupEnabled",
+            "include" : true
+          },
+          "pitr_enabled" : {
+            "title" :"PITR Enabled",
+            "path" : "pitEnabled",
+            "include" : true
+          },
+          "backup_compliance_configured" : {
+            "title" :"Backup Compliance configured",
+            "path" : "backupCompliance_configured",
+            "include" : true
+          },
+          "backup_snapshot_count" : {
+            "title" :"Backup snapshot count",
+            "path" : "backup_snapshot_count",
+            "include" : true
+          },
+          "online_archive_count" : {
+            "title" :"Online Archive Count",
+            "path" : "onlineArchiveForOneCluster_count",
+            "include" : true
+          },
+          "suggested_index_count" : {
+            "title" :"Suggested Index Count",
+            "path" : "performanceAdvisorSuggestedIndexes_count",
+            "include" : true
+          }
+        }
+      },
+      "advanced" : {
+        "include" : true,
+        "title" : "Advanced configuration",
+        "fields" : {
+          "javascript_enabled" : {
+            "title" :"Javascript Enabled",
+            "path" : "javascriptEnabled",
+            "include" : true
+          },
+          "minimum_enabled_tls_protocol" : {
+            "title" :"minimum enabled Tls Protocol",
+            "path" : "minimumEnabledTlsProtocol",
+            "include" : true
+          },
+          "query stats_log_verbosity" : {
+            "title" :"query stats log verbosity",
+            "path" : "queryStatsLogVerbosity",
+            "include" : true
+          },
+          "tls_cipher_config_mode" : {
+            "title" :"tls cipher config mode",
+            "path" : "tlsCipherConfigMode",
+            "include" : true
+          },
+          "change_stream_options_pre_and_post_images_expire_after_seconds" : {
+            "title" :"Pre+PostImages Expire After Seconds",
+            "path" : "changeStreamOptionsPreAndPostImagesExpireAfterSeconds",
+            "include" : true
+          },
+          "chunk_migration_concurrency" : {
+            "title" :"chunk Migration Concurrency",
+            "path" : "chunkMigrationConcurrency",
+            "include" : true
+          },
+          "custom_openssl_cipher_config_tls12" : {
+            "title" :"custom Openssl Cipher Config Tls12",
+            "path" : "customOpensslCipherConfigTls12",
+            "include" : true
+          },
+          "default_maxtime_ms" : {
+            "title" :"default Max Time MS",
+            "path" : "defaultMaxTimeMS",
+            "include" : true
+          },
+          "default_write_concern" : {
+            "title" :"default Write Concern",
+            "path" : "defaultWriteConcern",
+            "include" : true
+          },
+          "no_table_scan" : {
+            "title" :"no table scan",
+            "path" : "noTableScan",
+            "include" : true
+          },
+          "oplog_min_retention_hours" : {
+            "title" :"oplog min retention hours",
+            "path" : "oplogMinRetentionHours",
+            "include" : true
+          },
+          "oplog_size_mb" : {
+            "title" :"oplog Size MB",
+            "path" : "oplogSizeMB",
+            "include" : true
+          },
+          "sample_refresh_interval_bi_connector" : {
+            "title" :"sample Refresh Interval BI Connector",
+            "path" : "sampleRefreshIntervalBIConnector",
+            "include" : true
+          },
+          "sample_size_bi_connector" : {
+            "title" :"sample Size BI Connector",
+            "path" : "sampleSizeBIConnector",
+            "include" : true
+          },
+          "transaction_lifetime_limit_seconds" : {
+            "title" :"transaction Lifetime Limit Seconds",
+            "path" : "transactionLifetimeLimitSeconds",
+            "include" : true
+          }
+        }
+      },
+      "backup_compliance" : {
+        "include" : true,
+        "title" : "Backup Compliance"
+      },
+      "replication_specs" : {
+        "include" : true,
+        "title" : "Replication specs",
+        "electable_specs" : {
+          "include": true,
+          "title" : "Electable specs",
+          "fields": {
+            "instanceSize": {
+              "title": "Instance Size (tiers)",
+              "path": "instanceSize",
+              "include": true
+            },
+            "diskIOPS": {
+              "title": "Disk IOPS",
+              "path": "diskIOPS",
+              "include": true
+            },
+            "diskSizeGB": {
+              "title": "Disk Size (GB)",
+              "path": "diskSizeGB",
+              "include": true
+            },
+            "ebsVolumeType": {
+              "title": "Volume Type",
+              "path": "ebsVolumeType",
+              "include": true
+            },
+            "nodeCount": {
+              "title": "Node Count",
+              "path": "nodeCount",
+              "include": true
+            }
+          }
+        },
+        "read_only_specs" : {
+          "title" : "Read Only specs",
+          "include": true,
+          "fields": {
+            "instanceSize": {
+              "title": "Instance Size (tiers)",
+              "path": "instanceSize",
+              "include": true
+            },
+            "diskIOPS": {
+              "title": "Disk IOPS",
+              "path": "diskIOPS",
+              "include": true
+            },
+            "diskSizeGB": {
+              "title": "Disk Size (GB)",
+              "path": "diskSizeGB",
+              "include": true
+            },
+            "ebsVolumeType": {
+              "title": "Volume Type",
+              "path": "ebsVolumeType",
+              "include": true
+            },
+            "nodeCount": {
+              "title": "Node Count",
+              "path": "nodeCount",
+              "include": true
+            }
+          }
+        },
+        "analytic_specs" : {
+          "title" : "Analytic specs",
+          "include": true,
+          "autoscaling" : {
+            "title" : "Analytic Autoscaling",
+            "include": true,
+            "fields": {
+              "diskGB_enabled": {
+                "title": "Disk autoscaling Enabled",
+                "path": "diskGB.enabled",
+                "include": true
+              },
+              "compute_enabled" : {
+                "title": "Compute autoscaling Enabled",
+                "path": "compute.enabled",
+                "include": true
+              },
+              "compute_minInstanceSize" : {
+                "title": "Compute min Tiers",
+                "path": "compute.minInstanceSize",
+                "include": true
+              },
+              "compute_maxInstanceSize" : {
+                "title": "Compute max Tiers",
+                "path": "compute.maxInstanceSize",
+                "include": true
+              },
+              "compute_scaleDownEnabled" : {
+                "title": "Compute scale Down Enabled",
+                "path": "compute.scaleDownEnabled",
+                "include": true
+              },
+              "autoIndexing": {
+                "title": "Compute scale Down Enabled",
+                "path": "compute.scaleDownEnabled",
+                "include": true
+              }
+            }
+          },
+          "fields": {
+            "instanceSize": {
+              "title": "Instance Size (tiers)",
+              "path": "instanceSize",
+              "include": true
+            },
+            "diskIOPS": {
+              "title": "Disk IOPS",
+              "path": "diskIOPS",
+              "include": true
+            },
+            "diskSizeGB": {
+              "title": "Disk Size (GB)",
+              "path": "diskSizeGB",
+              "include": true
+            },
+            "ebsVolumeType": {
+              "title": "Volume Type",
+              "path": "ebsVolumeType",
+              "include": true
+            },
+            "nodeCount": {
+              "title": "Node Count",
+              "path": "nodeCount",
+              "include": true
+            }
+          }
+        }
+      }
+    }
+  }
+}

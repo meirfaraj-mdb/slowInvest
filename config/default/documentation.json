@@ -1,0 +1,20 @@
+{
+  "retrieval_mode": {
+    "type" : "array",
+    "desc" : "Specifies the mode for data retrieval.",
+    "choices" : [
+      {"choice":"files", "desc": "Access all metrics, slow operations, and other relevant data from log files.","dependencies": []},
+      {"choice":"Atlas","desc": "Access all metrics, slow operations, and other relevant data from the Atlas Admin API.","dependencies": ["requests>=2.32.3"]},
+      {"choice":"OpsManager","desc": "Access all metrics, slow operations, and other relevant data from the Ops Manager Admin API.","dependencies": ["requests>=2.32.3"]}]
+  },
+  "reports" : {
+    "type" : "doc",
+    "desc" : "The configuration section pertaining to reporting",
+    "formats": {
+      "type" : "array",
+      "desc" : "Supported format",
+      "choices" : [{"choice":"md", "desc": "markdown","dependencies": []},
+                   {"choice":"pdf","desc": "pdf","dependencies": ["fpdf2>=2.8.2"]}]
+    }
+  }
+}

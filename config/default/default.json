@@ -1,5 +1,7 @@
 {
+  "retrieval_mode": "files",
   "reports" : {
     "formats": ["pdf"]
-  }
+  },
+  "template" : null
 }

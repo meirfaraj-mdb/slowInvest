@@ -1,0 +1,135 @@
+{
+  "title" : "Audit Report",
+  "include_toc" : true,
+  "initial_empty_page" : false,
+  "sections" : {
+    "config" : {
+      "include" : true,
+      "general" : {
+        "include" : true,
+        "fields" : {
+          "cluster_type" : {
+            "include" : false
+          },
+          "create_date" : {
+            "include" : false
+          },
+          "feature_compatibility_version" : {
+            "include" : false
+          },
+          "mongodb_major_version" : {
+            "include" : false
+          },
+          "version_release_system" : {
+            "include" : false
+          },
+          "group_id" : {
+            "include" : false
+          },
+          "cluster_id" : {
+            "include" : false
+          },
+          "paused" : {
+            "include" : false
+          },
+          "termination_protection_enabled" : {
+            "include" : false
+          },
+          "bi_connector" : {
+            "include" : false
+          },
+          "tags" : {
+            "include" : false
+          },
+          "labels" : {
+            "include" : false
+          },
+          "config_server_management_mode" : {
+            "include" : false
+          },
+          "config_server_type" : {
+            "include" : false
+          },
+          "global_cluster_self_managed_sharding" : {
+            "include" : false
+          },
+          "disk_warming_mode" : {
+            "include" : false
+          },
+          "encryption_at_rest_provider" : {
+            "include" : false
+          },
+          "root_cert_type" : {
+            "include" : false
+          },
+          "redact_client_log_data" : {
+            "include" : false
+          },
+          "providers_count" : {
+            "include" : false
+          },
+          "backup_compliance_configured" : {
+            "include" : false
+          },
+          "online_archive_count" : {
+            "include" : false
+          }
+        }
+      },
+      "advanced" : {
+        "include" : true,
+        "title" : "Advanced configuration",
+        "fields" : {
+          "javascript_enabled" : {
+            "include" : false
+          },
+          "minimum_enabled_tls_protocol" : {
+            "include" : false
+          },
+          "query stats_log_verbosity" : {
+            "include" : false
+          },
+          "tls_cipher_config_mode" : {
+            "include" : false
+          },
+          "change_stream_options_pre_and_post_images_expire_after_seconds" : {
+            "include" : false
+          },
+          "chunk_migration_concurrency" : {
+            "include" : false
+          },
+          "custom_openssl_cipher_config_tls12" : {
+            "include" : false
+          },
+          "default_maxtime_ms" : {
+            "include" : false
+          },
+          "default_write_concern" : {
+            "include" : false
+          },
+          "no_table_scan" : {
+            "include" : false
+          },
+          "oplog_size_mb" : {
+            "include" : false
+          },
+          "sample_refresh_interval_bi_connector" : {
+            "include" : false
+          },
+          "sample_size_bi_connector" : {
+            "include" : false
+          },
+          "transaction_lifetime_limit_seconds" : {
+            "include" : false
+          }
+        }
+      },
+      "backup_compliance" : {
+        "include" : false
+      },
+      "replication_specs" : {
+        "include" : true
+      }
+    }
+  }
+}

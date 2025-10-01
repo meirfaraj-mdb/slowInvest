@@ -190,8 +190,7 @@ def remove_status_suffix(text):
 
 def generate_cluster_report(atlasApi, cluster, config, report):
     if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
-        report = Report(config.get_report_formats())
-        report.addpage()
+        report = Report(config)
     atlasApi.save_cluster_result(cluster)
     processesShard = cluster.get("processes", {})
     with concurrent.futures.ProcessPoolExecutor() as pool:
@@ -273,8 +272,7 @@ def generate_cluster_report(atlasApi, cluster, config, report):
 def file_retrieval_mode(config,report):
     for file in config.LOGS_FILENAME:
         if config.GENERATE_ONE_PDF_PER_CLUSTER_FILE:
-            report = Report(config.get_report_formats())
-            report.addpage()
+            report = Report(config)
         addToReport(extract_slow_queries_from_file(f"{config.INPUT_PATH}/{file}", f"{config.OUTPUT_FILE_PATH}/slow_queries_{file}",
                                          config.MAX_CHUNK_SIZE,config.SAVE_BY_CHUNK),
                     f"{config.OUTPUT_FILE_PATH}/{file}",
@@ -329,8 +327,7 @@ if __name__ == "__main__":
     first_option = sys.argv[1] if len(sys.argv) > 1 else None
     # Use the first_option in your Config class or elsewhere
     config = Config(first_option)
-    report = Report(config.get_report_formats())
-    report.addpage()
+    report = Report(config)
 
     if config.retrieval_mode == "Atlas":
         atlas_retrieval_mode(config,report)

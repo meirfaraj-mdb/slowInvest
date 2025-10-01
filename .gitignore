@@ -1,1 +1,12 @@
 *.pyc
+.idea
+__pycache__
+test
+build.sh
+colstat.txt
+inputs
+outputs
+reports
+logs
+render.yaml
+config/perso*

@@ -44,7 +44,7 @@ These configurations determine the behavior and functionality of the data retrie
 
 #### Atlas / Files / OpsManager
 
-- **`RETRIEVAL_MODE`**: Specifies the mode for data retrieval. Options are:
+- **`retrieval_mode`**: Specifies the mode for data retrieval. Options are:
     - `Atlas`
     - `files` (default)
     - `OpsManager`
