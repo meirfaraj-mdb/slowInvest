@@ -59,7 +59,7 @@ DF_COL = ['timestamp','hour','source','shard', 'db', 'namespace', 'slow_query', 
           'storage_data_bytesRead', 'storage_data_timeReadingMicros','storage_data_bytesWritten','storage_data_timeWritingMicros',
           'storage_data_bytesTotalDiskWR','storage_data_timeWRMicros',
           'storage_data_timeWaitingMicros_cache','storage_data_timeWaitingMicros_schemaLock','storage_data_timeWaitingMicros_handleLock',
-          'cmdType','count_of_in','max_count_in','sum_of_counts_in','getMore']
+          'cmdType','count_of_in','max_count_in','sum_of_counts_in','getMore','planCacheShapeHash','queryHash','planCacheKey','queryFramework']
 
 
 def extractSlowQueryInfos(log_entry,source,shard):
@@ -115,6 +115,12 @@ def extractSlowQueryInfos(log_entry,source,shard):
     ndeleted = attr.get("ndeleted", 0)
     reslen = attr.get("reslen", 0)
     usedDisk = attr.get("usedDisk", 0)
+
+
+    planCacheShapeHash = attr.get('planCacheShapeHash','')
+    queryHash = attr.get('queryHash','')
+    planCacheKey = attr.get('planCacheKey','')
+    queryFramework = attr.get('queryFramework','')
 
     fromMultiPlanner = attr.get("fromMultiPlanner", 0)
     replanned = attr.get("replanned", 0)
@@ -280,7 +286,7 @@ def extractSlowQueryInfos(log_entry,source,shard):
                      nMatched,nModified,nUpserted,ndeleted,keysInserted,keysDeleted,reslen,flowControl_acquireCount,flowControl_timeAcquiringMicros,
                      storage_data_bytesRead,storage_data_timeReadingMicros,storage_data_bytesWritten,storage_data_timeWritingMicros,storage_data_bytesTotalDiskWR,storage_data_timeWRMicros,
                      storage_data_timeWaitingMicros_cache,storage_data_timeWaitingMicros_schemaLock,storage_data_timeWaitingMicros_handleLock,
-                     cmdType,count_of_in,max_count_in,sum_of_counts,getMore]
+                     cmdType,count_of_in,max_count_in,sum_of_counts,getMore,planCacheShapeHash,queryHash,planCacheKey,queryFramework]
 
     return None
 

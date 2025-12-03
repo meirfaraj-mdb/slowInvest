@@ -210,11 +210,11 @@ def createAndInsertGraphs(config, prefix, report, result):
 
 # Function to plot each metric
 def plot_metric(process,metric_name, timestamps, values,prefix):
-    plt.figure(figsize=(10, 5))
+    plt.figure(figsize=(5, 5))
     plt.plot(timestamps, values, marker='o')
-    plt.title(f"Metric: {metric_name}")
-    plt.xlabel("Timestamp")
-    plt.ylabel("Value")
+    plt.title(f"Metric: {metric_name}", color='black')
+    plt.xlabel("Timestamp", color='black')
+    plt.ylabel("Value", color='black')
     plt.xticks(rotation=45)
     plt.tight_layout()
     svg_file_path = f"{prefix}_{metric_name}.svg"
@@ -223,32 +223,81 @@ def plot_metric(process,metric_name, timestamps, values,prefix):
     graph_logging.info(f"Metric graph saved to {svg_file_path}")
     return svg_file_path
 
-def plot_all_metricsForProcess(process, report,config,prefix):
-    measurements = process.get("future", {}).get("measurement",None)
-    if measurements is None:
+from datetime import datetime
+
+def plot_all_metricsForProcess(process, report, config, prefix):
+    measurements_future = process.get("future", {}).get("measurement", None)
+    if measurements_future is None:
         return
-    measurements = measurements.result()
+
+    measurements = measurements_future.result()
+    #for measure in measurements.get('measurements',[]) :
+    #   print(measure.get('name',""))
     if report:
         report.sub2Chapter_title("Metrics graph")
 
-    for measurement in measurements.get("measurements",[]):
-        data_points = measurement['dataPoints']
-        metric_name = measurement['name']
-        # Extract non-None and non-zero data
-        filtered_data = [(dp['timestamp'], dp['value']) for dp in data_points if dp['value'] is not None and dp['value'] != 0]
-        not_none_data = [(dp['timestamp'], dp['value']) for dp in data_points if dp['value'] is not None]
-        if filtered_data:
-            # Separate timestamps and values
-            timestamps, values = zip(*not_none_data)
+        # Get list of group names
+    list_of_groups = config.get_template("sections.cluster.per_node.graph.metrics",[])
+    group_defs = config.get_template("sections.cluster.per_node.graph.group_of_metrics",{})
 
-            # Convert timestamps to datetime objects
-            timestamps = [datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ") for ts in timestamps]
-            # Plot the metric
-            file = plot_metric(process,metric_name, timestamps, values,prefix)
+    # Build a dict for easy access {metric_name: measurement_dict}
+    measurements_map = {m["name"]: m for m in measurements.get("measurements", [])}
 
-            if file.endswith(("PROCESS_NORMALIZED_CPU_USER.svg","DB_STORAGE_TOTAL.svg","CONNECTIONS.svg")):
-                if report:
-                    report.addpage()
-                    report.add_image(file)
+    for group_name in list_of_groups:
+        group_info = group_defs.get(group_name, {})
+        metric_list = group_info.get("list_of_metrics", [])
+
+        group_timestamps_values = {}  # {metric_name: (timestamps, values)}
+        any_valid_data = False
+
+        for metric_name in metric_list:
+            measurement = measurements_map.get(metric_name)
+            if not measurement:
+                print(f"Metric {metric_name} not found for group {group_name}")
+                continue
+
+            data_points = measurement["dataPoints"]
+            filtered_data = [(dp['timestamp'], dp['value'])
+                             for dp in data_points
+                             if dp['value'] is not None and dp['value'] != 0]
+
+            if filtered_data:  # Non-zero and non-null data exists
+                any_valid_data = True
+
+                # Always store not-null data for plotting if group has any valid metric
+            not_none_data = [(dp['timestamp'], dp['value'])
+                             for dp in data_points if dp['value'] is not None]
+
+            if not_none_data:
+                timestamps, values = zip(*not_none_data)
+                timestamps = [datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ") for ts in timestamps]
+                group_timestamps_values[metric_name] = (timestamps, values)
+
+                # Now plot if at least one metric in the group had valid non-zero, non-null data
+        if any_valid_data:
+            file = plot_metric_group(process, group_name, group_timestamps_values, prefix)
+            if report:
+                report.add_image(file)
         else:
-            print(f"Skipped metric {metric_name} as all data points are None or 0.")
+            print(f"Skipped group {group_name} as all metrics are None or zero.")
+
+
+def plot_metric_group(process, group_name, metrics_data, prefix):
+    """
+    metrics_data: dict {metric_name: (timestamps, values)}
+    Plot multiple metrics on the same figure and return file name.
+    """
+    plt.figure(figsize=(10, 6))
+    for metric_name, (timestamps, values) in metrics_data.items():
+        plt.plot(timestamps, values, label=metric_name)
+
+    plt.title(f"Metrics Group: {group_name}", color='black')
+    plt.xlabel("Time", color='black')
+    plt.ylabel("Value", color='black')
+    plt.legend()
+    plt.grid(True)
+
+    file_name = f"{prefix}_{group_name}.svg"
+    plt.savefig(file_name)
+    plt.close()
+    return file_name

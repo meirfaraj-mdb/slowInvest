@@ -53,6 +53,10 @@ def getCommanShapeAggOp():
         'replanned':('replanned', distinct_values),
         'replanReason':('replanReason', distinct_values),
         'count_of_in':('count_of_in', distinct_values),
+        'planCacheShapeHash':('planCacheShapeHash', distinct_values),
+        'queryHash':('queryHash', distinct_values),
+        'planCacheKey':('planCacheKey', distinct_values),
+        'queryFramework':('queryFramework', distinct_values),
         'getMore':('getMore','sum')
     }
 

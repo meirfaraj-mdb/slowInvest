@@ -149,7 +149,9 @@ def atlas_retrieval_mode(config,report):
     if config.ATLAS_RETRIEVAL_SCOPE == "project":
         print(f"Get project {config.GROUP_ID} composition....")
         start_time_comp = time.time()
-        compositions = atlasApi.get_clusters_composition(config.GROUP_ID,full=config.GENERATE_INFRA_REPORT)
+        compositions = atlasApi.get_clusters_composition(config.GROUP_ID,full=config.GENERATE_INFRA_REPORT,
+                                                         scaling_start_date=config.get_config("atlas.scaling.start_date",None),
+                                                         scaling_num_month=config.get_config("atlas.scaling.num_months",None))
         end_time_comp = time.time()
         millis_str=convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)
         print(f"Received project {config.GROUP_ID} composition in {millis_str}")
@@ -161,7 +163,9 @@ def atlas_retrieval_mode(config,report):
         for cluster_name in config.CLUSTERS_NAME:
             print(f"Get cluster {cluster_name} composition....")
             start_time_comp = time.time()
-            compositions = atlasApi.get_clusters_composition(config.GROUP_ID,cluster_name,full=config.GENERATE_INFRA_REPORT)
+            compositions = atlasApi.get_clusters_composition(config.GROUP_ID,cluster_name,full=config.GENERATE_INFRA_REPORT,
+                                                             scaling_start_date=config.get_config("atlas.scaling.start_date",None),
+                                                             scaling_num_month=config.get_config("atlas.scaling.num_months",None))
             end_time_comp = time.time()
             millis_str=convertToHumanReadable("Millis",(end_time_comp-start_time_comp)*1000,True)
             print(f"Received cluster {cluster_name} composition in {millis_str}")

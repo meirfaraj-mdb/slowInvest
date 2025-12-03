@@ -3,5 +3,11 @@
   "reports" : {
     "formats": ["pdf"]
   },
+  "atlas": {
+    "scaling": {
+      "start_date": null,
+      "num_months": 1
+    }
+  },
   "template" : null
 }

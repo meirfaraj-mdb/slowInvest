@@ -325,6 +325,20 @@ class PDFReport(FPDF,AbstractReport):
                 self.display_line(col_width,row_height,k,v)
         #todo fields
 
+    def display_cluster_table_backupSnapshot(self,cluster):
+        if not self.config.get_template("sections.config.backup_compliance.include",True) :
+            return
+        self.set_font('helvetica', 'B', 8)
+        col_width = self.epw / 2
+        row_height = self.font_size * 1.5
+
+        if cluster["backupCompliance_configured"] == "True":
+            self.subChapter_title(self.config.get_template("sections.config.backup_compliance.title","Backup Compliance"))
+            for k,v in cluster["backupCompliance"].items():
+                self.display_line(col_width,row_height,k,v)
+        #todo fields
+
+
     def display_cluster_table_replication_prc_specs(self,type,region_elect,autoscaling):
         if not self.config.get_template(f"sections.config.replication_specs.{type}.include",True) :
             return
@@ -421,7 +435,7 @@ class PDFReport(FPDF,AbstractReport):
         self.display_cluster_table_advanced(cluster)
 
         self.display_cluster_table_backupCompliance(cluster)
-
+        #backup_snapshot
         self.display_cluster_table_replication_specs(cluster)
 
         scaling=cluster.get("scaling",[])
@@ -440,7 +454,7 @@ class PDFReport(FPDF,AbstractReport):
             self.add_table(scaling,
                            ['id', 'compute_auto_scaling_triggers'],
                            ['id','compute auto scale triggers'],
-                           col_diff,4,5)
+                           col_diff,4,5,True)
             timeline = create_instance_size_timeline(scaling)
             # Output the timeline
             self.sub2Chapter_title("Scaling At minimum for "+cluster.get("name",""))
@@ -484,7 +498,7 @@ class PDFReport(FPDF,AbstractReport):
         self.add_page()
 
 
-    def add_table(self, data_list, columns,columns_name=None,col_size_diff={},size=4,line=1):
+    def add_table(self, data_list, columns,columns_name=None,col_size_diff={},size=4,line=1,skipIfColumnEmpty=False):
         """Add a pdf table."""
         # Add column headers
         num_columns = len(columns)
@@ -510,6 +524,13 @@ class PDFReport(FPDF,AbstractReport):
         # Add each data row
         for data in data_list:
             i=0
+            if skipIfColumnEmpty :
+                containsEmpty = False
+                for col in columns:
+                    if len(str(get_nested_value(data, col)).strip())==0:
+                        containsEmpty = True
+                if containsEmpty :
+                    continue
             for col in columns:
                 if(i<len(columns)-1):
                     self.cell(col_width+diff_col[i], line*row_height, str(get_nested_value(data,col)),
@@ -589,16 +610,36 @@ class PDFReport(FPDF,AbstractReport):
         self.multi_cell(0, 5, code, 0, 'L', True)
         self.ln()
 
-    def add_image(self, image_path):
+    def add_image(self, image_path, img_width=None, padding=2):
+        """Add an image to the PDF. If enough space remains in the row, place it next to the current image."""
         try:
-            self.image(image_path,
-                   x=2,
-                   w=self.epw,
-                   keep_aspect_ratio=True)
-        except Exception as err:
-            pdf_reports_logging.error(f"fail to add image {image_path}",err)
+            self.set_text_color(0, 0, 0)  # Black text
+            # Width for image: default to half of effective page width
+            if img_width is None:
+                img_width = self.epw / 2.5
 
-        #self.ln(10)
+            current_x = self.get_x()
+            current_y = self.get_y()
+
+            # Does the image fit in remaining width?
+            remaining_width = self.epw - (current_x - self.l_margin)
+            if img_width <= remaining_width:
+                # Fits, place it here
+                self.image(image_path, x=current_x, y=current_y, w=img_width, keep_aspect_ratio=True)
+                # Move X for next image, with padding
+                self.set_x(current_x + img_width + padding)
+            else:
+                # Not enough space, move to next line
+                # Find tallest image height in row? Here we just jump down by img_width ratio
+                img_height = img_width * 0.75  # approximate height (depends on aspect ratio)
+                self.set_xy(self.l_margin, current_y + img_height + padding)
+                self.image(image_path, x=self.get_x(), y=self.get_y(), w=img_width, keep_aspect_ratio=True)
+                self.set_x(self.get_x() + img_width + padding)
+
+        except Exception:
+            pdf_reports_logging.exception(f"Fail to add image: {image_path}")
+            #self.ln(10)
+
     def add_colored_json(self, json_data, x, y, w, h):
         self.set_font("Courier", "", 7)
         self.set_xy(x, y)

@@ -16,5 +16,21 @@
       "choices" : [{"choice":"md", "desc": "markdown","dependencies": []},
                    {"choice":"pdf","desc": "pdf","dependencies": ["fpdf2>=2.8.2"]}]
     }
+  },
+  "atlas": {
+    "type" : "doc",
+    "desc" : "The configuration section pertaining to Atlas",
+    "scaling": {
+      "type" : "doc",
+      "desc" : "The configuration section pertaining to scaling",
+      "start_date" :{
+        "type" : "string",
+        "desc" : "min date as string"
+      },
+      "num_months" :{
+        "type" : "int",
+        "desc" : "number of months to include"
+      }
+    }
   }
 }

@@ -187,3 +187,59 @@
 | `compute_maxInstanceSize` | Compute max Tiers | `compute.maxInstanceSize` | True |
 | `compute_scaleDownEnabled` | Compute scale Down Enabled | `compute.scaleDownEnabled` | True |
 | `autoIndexing` | Compute scale Down Enabled | `compute.scaleDownEnabled` | True |
+
+## cluster
+
+### per_node
+
+#### graph
+
+##### group_of_metrics
+
+###### ASSERTIONS
+
+###### CACHE
+
+###### CONNECTIONS_AND_CURSORS
+
+###### STORAGE
+
+###### DOCUMENT_ACTIVITY
+
+###### PAGE_FAULTS
+
+###### GLOBAL_LOCK
+
+###### MEMORY
+
+###### NETWORK
+
+###### OPCOUNTERS_PRIMARY
+
+###### OPCOUNTERS_REPL
+
+###### OPERATIONS
+
+###### OP_EXECUTION_TIMES
+
+###### OPLOG
+
+###### QUERY_EXECUTION
+
+###### READ_WRITE_TICKETS
+
+###### OPERATION_THROTTLING
+
+###### QUERY_SPILL_SORT
+
+###### PROCESS_CPU
+
+###### FTS_PROCESS
+
+###### SYSTEM_CPU
+
+###### SYSTEM_NETWORK
+
+###### SWAP_IO
+
+###### SYSTEM_MEMORY

@@ -141,12 +141,13 @@ class Config():
     def get_fields_array(self,path):
         result = []
         fields = self.get("template",self.default_template,self.default_template, path, [])
+        if fields :
+            for field_key, field_info in fields.items():
+                base_path = path+"."+field_key
+                if self.get_template(base_path+".include", True) :
+                    result.append([self.get_template(base_path+".title","N/A"),
+                                   self.get_template(base_path+".path","N/A")])
 
-        for field_key, field_info in fields.items():
-            base_path = path+"."+field_key
-            if self.get_template(base_path+".include", True) :
-                result.append([self.get_template(base_path+".title","N/A"),
-                               self.get_template(base_path+".path","N/A")])
         return result
 
     def get_report_formats(self):

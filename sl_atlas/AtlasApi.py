@@ -8,6 +8,7 @@ import msgspec
 import requests
 from requests.auth import HTTPDigestAuth
 
+from dateutil.relativedelta import relativedelta
 import sl_utils.utils
 from sl_async.gzip import BufferedGzipWriter
 from sl_async.slatlas import BufferedSlAtlasSource
@@ -428,7 +429,16 @@ class AtlasApi():
 
     #https://cloud.mongodb.com/api/atlas/v2/groups/{groupId}
     #    def
-    def getAutoScalingEvent(self,group_id,cluster_names=None):
+    def getAutoScalingEvent(self,group_id,cluster_names=None, start_date=None, num_months=None):
+        """
+            Retrieve auto-scaling events for the given project and optional cluster(s).
+
+            Parameters:
+                group_id (str): MongoDB Atlas Project ID.
+                cluster_names (list[str], optional): Filter events by these cluster names.
+                start_date (str, optional): Explicit start date string (YYYY-MM-DD).
+                num_months (int, optional): If set, calculates minDate = now - num_months months in UTC.
+        """
         total=0
         page_num=1
         args = {
@@ -451,6 +461,15 @@ class AtlasApi():
         }
         if not(cluster_names is None):
             args["clusterNames"]=cluster_names
+        # Handle date parameters
+        if num_months is not None:
+            # Calculate now - num_months in UTC
+            min_date = (datetime.utcnow() - relativedelta(months=num_months)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            args["minDate"] = min_date
+        elif start_date is not None:
+            # Pass explicit start date (assuming it's already in correct format)
+            args["minDate"] = start_date
+
         resp=None
         results=[]
         while (resp is None) or total<len(results):
@@ -592,7 +611,7 @@ class AtlasApi():
 
 
 # missing
-    def get_clusters_composition(self,group_id=None,cluster_name=None,full=True):
+    def get_clusters_composition(self,group_id=None,cluster_name=None,full=True,scaling_start_date=None,scaling_num_month=None):
         result=[]
 
         #Group_id None not yet supported
@@ -624,7 +643,7 @@ class AtlasApi():
                 cluster["future"]["backupCompliance"] = pool.submit(self.getBackupCompliance,group_id)
                 cluster["future"]["backup_snapshot"] = pool.submit(self.listAllBackupSnapshotForCluster,group_id,cluster_name,cluster["clusterType"])
                 cluster["future"]["advancedConfiguration"] = pool.submit(self.getAdvancedConfigurationForOneCluster,group_id, cluster_name)
-                cluster["future"]["scaling"] = pool.submit(self.getAutoScalingEvent,group_id,[cluster_name])
+                cluster["future"]["scaling"] = pool.submit(self.getAutoScalingEvent,group_id,[cluster_name],scaling_start_date,scaling_num_month)
 
             replicationSpecs = cluster.get('replicationSpecs',None)
             providersSet = set()
