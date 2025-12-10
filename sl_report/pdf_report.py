@@ -8,7 +8,7 @@ from sl_utils.utils import *
 import msgspec
 
 from datetime import datetime
-
+import html
 pdf_reports_logging = logging.getLogger("pdf_reports")
 pdf_reports_logging.setLevel(logging.DEBUG)
 
@@ -424,7 +424,8 @@ class PDFReport(FPDF,AbstractReport):
     def display_cluster_table(self,cluster):
         if not self.config.get_template("sections.config.include",True) :
             return
-        self.add_page()
+        if self.config.get_template("initial_empty_page",True) :
+            self.add_page()
         name=cluster.get('name')
         self.chapter_title(f"Cluster {name} report")
         cluster["performanceAdvisorSuggestedIndexes_count"] = len(cluster["performanceAdvisorSuggestedIndexes"]
@@ -440,7 +441,8 @@ class PDFReport(FPDF,AbstractReport):
 
         scaling=cluster.get("scaling",[])
         if len(scaling)>0:
-            self.add_page()
+            if self.config.get_template("initial_empty_page",True) :
+                self.add_page()
             self.subChapter_title("Scaling information "+cluster.get("name",""))
             col_diff={'id':15,'created':8,'scal_type':-4,"scal_succeed":-8,"scal_fail_cause":5,'raw.originalCostPerHour':-4,'raw.newCostPerHour':-4,'raw.originalDiskSizeGB':-4,'raw.newDiskSizeGB':-4,'raw.originalInstanceSize':-10, 'raw.newInstanceSize':-10,'raw.isAtMaxCapacityAfterAutoScale':-5}
             self.add_table(scaling,
@@ -457,14 +459,16 @@ class PDFReport(FPDF,AbstractReport):
                            col_diff,4,5,True)
             timeline = create_instance_size_timeline(scaling)
             # Output the timeline
-            self.sub2Chapter_title("Scaling At minimum for "+cluster.get("name",""))
             minTable = [dp for dp in timeline if dp.get('is_min_instance',False)]
-            self.add_table(minTable,
+            if len(minTable)>0:
+                self.sub2Chapter_title("Scaling At minimum for "+cluster.get("name",""))
+                self.add_table(minTable,
                            ['start', 'end','instanceSize'],size=8)
 
-            self.sub2Chapter_title("Scaling At maximum for "+cluster.get("name",""))
             maxTable = [dp for dp in timeline if dp.get('is_max_instance',False)]
-            self.add_table(maxTable,
+            if len(minTable)>0:
+                self.sub2Chapter_title("Scaling At maximum for "+cluster.get("name",""))
+                self.add_table(maxTable,
                            ['start', 'end','instanceSize'])
 
             for dp in timeline:
@@ -477,7 +481,8 @@ class PDFReport(FPDF,AbstractReport):
 
         custom_alert=cluster.get("custom_alert", {})
         if len(custom_alert) > 0:
-            self.add_page()
+            if self.config.get_template("initial_empty_page",True) :
+                self.add_page()
             self.subChapter_title("Custom alert for "+cluster.get("name",""))
             scaling_alert=custom_alert.get("scaling",{})
             if len(scaling_alert) > 0:
@@ -640,13 +645,77 @@ class PDFReport(FPDF,AbstractReport):
             pdf_reports_logging.exception(f"Fail to add image: {image_path}")
             #self.ln(10)
 
-    def add_colored_json(self, json_data, x, y, w, h):
-        self.set_font("Courier", "", 7)
-        self.set_xy(x, y)
-        self.set_fill_color(240, 240, 240)  # Light gray background
-        self.rect(x, y, w, h, 'F')  # Draw the box
-        self.set_xy(x + 2, y + 2)  # Add some padding
-        self.write_html(self.json_to_html(decoder.decode(json_data)))
+
+    def add_colored_json(self, json_data, w=None):
+        """
+        Render colored JSON in a light gray box at the current position,
+        with correct multi-page handling. Draws rect first, writes content once.
+        """
+        # Save original graphic state
+        orig_font_family = self.font_family
+        orig_font_style = self.font_style
+        orig_font_size_pt = self.font_size_pt
+        orig_fill_color = self.fill_color
+        if not (
+                isinstance(orig_fill_color, (tuple, list)) and
+                len(orig_fill_color) == 3 and
+                all(isinstance(c, (int, float)) for c in orig_fill_color)
+        ):
+            orig_fill_color = (0, 0, 0)  # default black
+
+        # Default width = remaining space
+        if w is None:
+            left_margin = self.l_margin
+            right_margin = self.r_margin
+            page_width = self.w
+            w = page_width - self.get_x() - right_margin
+
+        try:
+            # Parse JSON if needed
+            if isinstance(json_data, (str, bytes)):
+                parsed = decoder.decode(json_data)
+            else:
+                parsed = json_data
+
+            html_content = self.json_to_html(parsed)
+
+            # Set font for JSON
+            self.set_font("Courier", "", 7)
+
+            start_x = self.get_x()
+            start_y = self.get_y()
+
+            # --- Height estimation from <br> ---
+            lines = html_content.split("<br>")
+            line_height = self.font_size_pt * 0.3528  # pt to mm
+            estimated_height = (len(lines) * line_height) + 4  # +4mm padding
+
+            # If we don't have enough space left, add a page before drawing
+            if start_y + estimated_height > self.page_break_trigger:
+                self.add_page()
+                start_x = self.get_x()
+                start_y = self.get_y()
+
+                # --- Draw rectangle first ---
+            self.set_fill_color(240, 240, 240)
+            self.rect(start_x, start_y, w, estimated_height, 'F')
+
+            # --- Write content only once on top of rectangle ---
+            self.set_xy(start_x + 2, start_y + 2)  # padding
+            self.write_html(html_content)
+
+            # Move cursor below box after content
+            self.set_y(start_y + estimated_height)
+
+        except Exception as e:
+            logging.exception(f"Error rendering JSON in PDF: {e}")
+            self.write_html(f"<font color='red'>Invalid JSON: {html.escape(str(e))}</font>")
+            self.ln(5)
+
+        finally:
+            # Restore original font/fill
+            self.set_font(orig_font_family, orig_font_style, orig_font_size_pt)
+            self.set_fill_color(*orig_fill_color)
 
     def json_to_html(self, json_data, indent=0):
         # Ensure indent is an integer
@@ -691,7 +760,7 @@ class PDFReport(FPDF,AbstractReport):
         return html_output
 
     def add_json(self,json_data):
-        self.add_colored_json(json_data, x=10, y=30, w=190, h=250)
+        self.add_colored_json(json_data, w=190)
 
     def write(self,name):
         print(f"Writing {name}.pdf")

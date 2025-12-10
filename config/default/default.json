@@ -1,9 +1,16 @@
 {
   "retrieval_mode": "files",
   "reports" : {
-    "formats": ["pdf"]
+    "formats": ["pdf"],
+    "top_slow_query_shape" : 5,
+    "min_duration_slow_query_shape" : 60,
+    "group_by_issue" : false
   },
   "atlas": {
+    "PUBLIC_KEY": null,
+    "PRIVATE_KEY": null,
+    "GROUP_ID": null,
+    "retrieval_scope": "project",
     "scaling": {
       "start_date": null,
       "num_months": 1

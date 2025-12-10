@@ -24,7 +24,8 @@ import logging
 # display slow query
 def process_row(index, row,report,columns):
     # Define a function to apply to each row
-    report.addpage()
+    if config.get_template("initial_empty_page",True) :
+        report.addpage()
 
     cmdType=convertToHumanReadable('cmdType',row['cmdType'])
     namespace=convertToHumanReadable('namespace',row['namespace'])
@@ -41,7 +42,8 @@ def process_row(index, row,report,columns):
 
 
     report.add_json(row['command_shape'])
-    report.addpage()
+    if config.get_template("initial_empty_page",True) :
+        report.addpage()
     report.table(row.drop(columns=['command_shape']), [col for col in columns if col != 'command_shape'])
 
 
@@ -49,7 +51,9 @@ def process_row(index, row,report,columns):
 def display_queries(reportTitle,report, df):
     if df is None or df.empty :
         return
-    report.addpage()
+
+    if config.get_template("initial_empty_page",True) :
+        report.addpage()
     report.sub2Chapter_title(reportTitle)
     df = df.copy()
     # Ensure the column used for grouping contains hashable types
@@ -106,34 +110,44 @@ def addCommandShapAnalysis(command_shape_stats, config, report):
         command_shape_stats = command_shape_stats[
             command_shape_stats['durationMillis_total'] >= (1000 * config.MINIMUM_DURATION_FOR_QUERYSHAPE)]
     # Sort by average duration
-    filtered_df = command_shape_stats[command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
-    # Create DataFrame excluding filtered rows
-    remaining_df = command_shape_stats[~command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
-    # bad query targeting
-    # Further split remaining_df
-    sort_stage_df = remaining_df[remaining_df['has_sort_stage'] == True]
-    no_sort_stage_df = remaining_df[remaining_df['has_sort_stage'] == False]
-    with_conflict = no_sort_stage_df[no_sort_stage_df['writeConflicts_total'] > 0]
-    without_conflict = no_sort_stage_df[no_sort_stage_df['writeConflicts_total'] == 0]
-    has_skip = without_conflict[without_conflict['skip_total'] > 0]
-    without_skip = without_conflict[without_conflict['skip_total'] == 0]
-    # $in
-    has_badIn = without_skip[without_skip['max_count_in_max'] > 200]
-    without_badIn = without_skip[without_skip['max_count_in_max'] <= 200]
-    # regex
-    # array filter
-    ##without_badIn
-    report.subChapter_title("List of slow query shape")
-    display_queries("List of Collscan query shape", report, filtered_df)
-    display_queries("List of remain hasSortStage query shape", report, sort_stage_df)
-    display_queries("List of other query withConflict", report, with_conflict)
-    ###################SKIP
-    display_queries("List of other query with skip", report, has_skip)
-    ###################bad $in
-    display_queries("List of query with bad $in", report, has_badIn)
-    ###################$Regex
-    ###################disk
-    display_queries("List of other query shape", report, without_badIn)
+    if config.LIMIT_QUERYSHAPE > 0:
+        command_shape_stats = (command_shape_stats.
+                               sort_values(by=['durationMillis_total','slow_query'], ascending=[False, False])
+                               .head(config.LIMIT_QUERYSHAPE))
+    if config.GROUP_BY_ISSUE:
+        filtered_df = command_shape_stats[command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
+
+        # Create DataFrame excluding filtered rows
+        remaining_df = command_shape_stats[~command_shape_stats['plan_summary'].str.contains("COLLSCAN", na=False)]
+        # bad query targeting
+        # Further split remaining_df
+        sort_stage_df = remaining_df[remaining_df['has_sort_stage'] == True]
+        no_sort_stage_df = remaining_df[remaining_df['has_sort_stage'] == False]
+        with_conflict = no_sort_stage_df[no_sort_stage_df['writeConflicts_total'] > 0]
+        without_conflict = no_sort_stage_df[no_sort_stage_df['writeConflicts_total'] == 0]
+        has_skip = without_conflict[without_conflict['skip_total'] > 0]
+        without_skip = without_conflict[without_conflict['skip_total'] == 0]
+        # $in
+        has_badIn = without_skip[without_skip['max_count_in_max'] > 200]
+        without_badIn = without_skip[without_skip['max_count_in_max'] <= 200]
+        # regex
+        # array filter
+        ##without_badIn
+        report.subChapter_title("List of slow query shape")
+
+        display_queries("List of Collscan query shape", report, filtered_df)
+        display_queries("List of remain hasSortStage query shape", report, sort_stage_df)
+        display_queries("List of other query withConflict", report, with_conflict)
+        ###################SKIP
+        display_queries("List of other query with skip", report, has_skip)
+        ###################bad $in
+        display_queries("List of query with bad $in", report, has_badIn)
+        ###################$Regex
+        ###################disk
+        display_queries("List of other query shape", report, without_badIn)
+    else:
+        report.subChapter_title("List of slow query shape")
+        display_queries(f"List of TOP {config.LIMIT_QUERYSHAPE} query shape", report, command_shape_stats)
 
 
 # TODO: has sort stage need fix

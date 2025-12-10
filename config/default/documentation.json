@@ -15,6 +15,18 @@
       "desc" : "Supported format",
       "choices" : [{"choice":"md", "desc": "markdown","dependencies": []},
                    {"choice":"pdf","desc": "pdf","dependencies": ["fpdf2>=2.8.2"]}]
+    },
+    "top_slow_query_shape" : {
+      "type": "number",
+      "desc": "Number of top slow query to display on the section"
+    },
+    "min_duration_slow_query_shape" : {
+      "type": "number",
+      "desc": "Minimum total slow query duration in second to display it"
+    },
+    "group_by_issue": {
+      "type": "boolean",
+      "desc": "Group slow queries by issue type"
     }
   },
   "atlas": {
@@ -30,6 +42,25 @@
       "num_months" :{
         "type" : "int",
         "desc" : "number of months to include"
+      },
+      "PUBLIC_KEY": {
+        "type" : "string",
+        "desc" : "Atlas admin api public key"
+      },
+      "PRIVATE_KEY": {
+        "type" : "string",
+        "desc" : "Atlas admin api private key"
+      },
+      "GROUP_ID": {
+        "type" : "string",
+        "desc" : "Atlas project/group ID"
+      },
+      "retrieval_scope": {
+        "type" : "string",
+        "desc" : "Atlas project/group ID",
+        "choices" : [{"choice":"project", "desc": "do the report for all cluster of the project at once"},
+                     {"choice":"clusters","desc": "do the report for all cluster listed"},
+                     {"choice":"processId","desc": "do the report for listed proccessId"}]
       }
     }
   }
