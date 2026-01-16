@@ -35,9 +35,13 @@ class BufferedSlAtlasSource(SlSource):
             arg={}
             it+=1
             if not (self.dtime is None):
-                since=str(int(time.mktime(self.dtime.timetuple())*1000))
-                print(f"executing slowQuery {self.processId} : since : {since}")
-                arg={"since": since}
+                if self.atlas.config.get_config("atlas.take_report_date_from", None) == "last":
+                    since=str(int(time.mktime(self.dtime.timetuple())*1000))
+                    print(f"executing slowQuery {self.processId} : since : {since}")
+                    arg={"since": since}
+                else :
+                    since=str(int(time.mktime(self.dtime.timetuple())*1000))
+                    print(f"executing slowQuery {self.processId} : 24H ignored : since : {since}")
             resp=self.atlas.atlas_request('SlowQueries', path, '2023-01-01', arg)
             last_count=len(resp['slowQueries'])
             total_loaded+=last_count

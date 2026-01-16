@@ -1,26 +1,55 @@
 {
   "retrieval_mode": {
-    "type" : "array",
-    "desc" : "Specifies the mode for data retrieval.",
-    "choices" : [
-      {"choice":"files", "desc": "Access all metrics, slow operations, and other relevant data from log files.","dependencies": []},
-      {"choice":"Atlas","desc": "Access all metrics, slow operations, and other relevant data from the Atlas Admin API.","dependencies": ["requests>=2.32.3"]},
-      {"choice":"OpsManager","desc": "Access all metrics, slow operations, and other relevant data from the Ops Manager Admin API.","dependencies": ["requests>=2.32.3"]}]
+    "type": "array",
+    "desc": "Specifies the mode for data retrieval.",
+    "choices": [
+      {
+        "choice": "files",
+        "desc": "Access all metrics, slow operations, and other relevant data from log files.",
+        "dependencies": []
+      },
+      {
+        "choice": "Atlas",
+        "desc": "Access all metrics, slow operations, and other relevant data from the Atlas Admin API.",
+        "dependencies": [
+          "requests>=2.32.3"
+        ]
+      },
+      {
+        "choice": "OpsManager",
+        "desc": "Access all metrics, slow operations, and other relevant data from the Ops Manager Admin API.",
+        "dependencies": [
+          "requests>=2.32.3"
+        ]
+      }
+    ]
   },
-  "reports" : {
-    "type" : "doc",
-    "desc" : "The configuration section pertaining to reporting",
+  "reports": {
+    "type": "doc",
+    "desc": "The configuration section pertaining to reporting",
     "formats": {
-      "type" : "array",
-      "desc" : "Supported format",
-      "choices" : [{"choice":"md", "desc": "markdown","dependencies": []},
-                   {"choice":"pdf","desc": "pdf","dependencies": ["fpdf2>=2.8.2"]}]
+      "type": "array",
+      "desc": "Supported format",
+      "choices": [
+        {
+          "choice": "md",
+          "desc": "markdown",
+          "dependencies": []
+        },
+        {
+          "choice": "pdf",
+          "desc": "pdf",
+          "dependencies": [
+            "fpdf2>=2.8.2"
+          ]
+        }
+      ]
     },
-    "top_slow_query_shape" : {
+    "top_slow_query_shape": {
       "type": "number",
       "desc": "Number of top slow query to display on the section"
     },
-    "min_duration_slow_query_shape" : {
+    "min_duration_slow_query_shape": {
       "type": "number",
       "desc": "Minimum total slow query duration in second to display it"
     },
@@ -30,38 +59,77 @@
     }
   },
   "atlas": {
-    "type" : "doc",
-    "desc" : "The configuration section pertaining to Atlas",
+    "type": "doc",
+    "desc": "The configuration section pertaining to Atlas",
     "scaling": {
-      "type" : "doc",
-      "desc" : "The configuration section pertaining to scaling",
-      "start_date" :{
-        "type" : "string",
-        "desc" : "min date as string"
+      "type": "doc",
+      "desc": "The configuration section pertaining to scaling",
+      "start_date": {
+        "type": "string",
+        "desc": "min date as string"
       },
-      "num_months" :{
-        "type" : "int",
-        "desc" : "number of months to include"
-      },
-      "PUBLIC_KEY": {
-        "type" : "string",
-        "desc" : "Atlas admin api public key"
-      },
-      "PRIVATE_KEY": {
-        "type" : "string",
-        "desc" : "Atlas admin api private key"
-      },
-      "GROUP_ID": {
-        "type" : "string",
-        "desc" : "Atlas project/group ID"
-      },
-      "retrieval_scope": {
-        "type" : "string",
-        "desc" : "Atlas project/group ID",
-        "choices" : [{"choice":"project", "desc": "do the report for all cluster of the project at once"},
-                     {"choice":"clusters","desc": "do the report for all cluster listed"},
-                     {"choice":"processId","desc": "do the report for listed proccessId"}]
+      "num_months": {
+        "type": "int",
+        "desc": "number of months to include"
       }
+    },
+    "PUBLIC_KEY": {
+      "type": "string",
+      "desc": "Atlas admin api public key"
+    },
+    "PRIVATE_KEY": {
+      "type": "string",
+      "desc": "Atlas admin api private key"
+    },
+    "org_id": {
+      "type": "string",
+      "desc": "Atlas organization ID"
+    },
+    "GROUP_ID": {
+      "type": "string",
+      "desc": "Atlas project/group ID"
+    },
+    "retrieval_scope": {
+      "type": "string",
+      "desc": "Atlas project/group ID",
+      "choices": [
+        {
+          "choice": "project",
+          "desc": "do the report for all cluster of the project at once"
+        },
+        {
+          "choice": "clusters",
+          "desc": "do the report for all cluster listed"
+        },
+        {
+          "choice": "processId",
+          "desc": "do the report for listed proccessId"
+        }
+      ]
+    },
+    "take_report_date_from": {
+      "type": "string",
+      "desc": "what time to take the report from",
+      "choices": [
+        {
+          "choice": "24H",
+          "desc": "default take last 24H"
+        },
+        {
+          "choice": "last",
+          "desc": "from the last time we ran the report"
+        }
+      ]
+    },
+    "take_report_date_to": {
+      "type": "string",
+      "desc": "what time to end take the report to",
+      "choices": [
+        {
+          "choice": "now",
+          "desc": "default till now"
+        }
+      ]
     }
   }
 }

@@ -5,6 +5,7 @@ from concurrent.futures.process import ProcessPoolExecutor
 from matplotlib import pyplot as plt
 import matplotlib
 import logging
+import pandas as pd
 from datetime import datetime
 graph_logging = logging.getLogger("graphs")
 
@@ -301,3 +302,90 @@ def plot_metric_group(process, group_name, metrics_data, prefix):
     plt.savefig(file_name)
     plt.close()
     return file_name
+
+def plot_sku_monthly_costs(config, sku_data_json, title, output_file=None):
+    """
+    sku_data_json = dict returned from get_cluster_billing_sku_evolution()
+    Produces a bar chart for each month with SKUs as bars, labeled with cost/%/evolution.
+    """
+    if config.GENERATE_PNG:
+        if matplotlib.get_backend() != "cairo":
+            matplotlib.use("cairo")
+    elif matplotlib.get_backend() != "svg":
+        matplotlib.use("svg")
+
+        # Convert JSON structure to DataFrame
+    records = []
+    for month, month_info in sku_data_json.items():
+        totalcost = month_info.get("totalcost", 0)
+        evol_prev = month_info.get("evolution_previous_month_in_perc", None)
+        evol_start = month_info.get("evolution_from_range_start_in_perc", None)
+        for sku, sku_info in month_info.get("sku", {}).items():
+            records.append({
+                "month": month,
+                "sku": sku,
+                "cost": sku_info.get("cost", 0),
+                "percent_monthly_cost": sku_info.get("percent_monthly_cost", 0),
+                "evol_prev": sku_info.get("evolution_previous_month_in_perc", None),
+                "evol_start": sku_info.get("evolution_from_range_start_in_perc", None),
+                "month_evol_prev": evol_prev,
+                "month_evol_start": evol_start
+            })
+    df = pd.DataFrame(records)
+
+    if df.empty:
+        return []
+
+        # Keep top 15 SKUs per month by cost for readability
+    top_skus = []
+    for month in df['month'].unique():
+        top = df[df['month'] == month].nlargest(15, 'cost')['sku']
+        top_skus.extend(top)
+    df = df[df['sku'].isin(top_skus)]
+
+    months = sorted(df['month'].unique())
+    num_months = len(months)
+    fig, axes = plt.subplots(num_months, 1, figsize=(14, 6 * num_months))
+
+    if num_months == 1:
+        axes = [axes]  # make iterable
+
+    for ax, month in zip(axes, months):
+        month_df = df[df['month'] == month].sort_values(by='cost', ascending=False)
+        bars = ax.bar(month_df['sku'], month_df['cost'], color='skyblue')
+
+        ax.set_title(f"{title} - {month} (Total: {month_df['cost'].sum():,.2f})", fontsize=14)
+        ax.set_ylabel("Cost")
+        ax.set_xlabel("SKU")
+        ax.tick_params(axis='x', rotation=90)
+
+        # Annotate bars
+        for bar, (_, row) in zip(bars, month_df.iterrows()):
+            label_parts = [f"${row['cost']:,.0f}", f"{row['percent_monthly_cost']:.1f}%"]
+            if row['evol_prev'] is not None:
+                label_parts.append(f"{row['evol_prev']:+.1f}% vs prev")
+            if row['evol_start'] is not None:
+                label_parts.append(f"{row['evol_start']:+.1f}% vs start")
+            label = "\n".join(label_parts)
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height(),
+                label,
+                ha='center', va='bottom', fontsize=8, rotation=90
+            )
+
+    plt.tight_layout()
+
+    file_paths = []
+    if output_file:
+        output_file = output_file.replace(':', '_')
+        if config.GENERATE_PNG:
+            png_file_path = f"{output_file}.png"
+            plt.savefig(png_file_path, bbox_inches='tight')
+            file_paths.append(png_file_path)
+        svg_file_path = f"{output_file}.svg"
+        plt.savefig(svg_file_path, format="svg", bbox_inches='tight')
+        file_paths.append(svg_file_path)
+
+    plt.close(fig)
+    return file_paths

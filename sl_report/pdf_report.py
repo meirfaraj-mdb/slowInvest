@@ -2,11 +2,14 @@ import logging
 
 from fpdf import *
 from fpdf.enums import XPos,YPos
+from fpdf.pattern import shape_linear_gradient
 
+from sl_plot.graphs import plot_sku_monthly_costs
 from sl_report.report import AbstractReport
 from sl_utils.utils import *
 import msgspec
 
+from sl_plot.graphs import plot_sku_monthly_costs
 from datetime import datetime
 import html
 pdf_reports_logging = logging.getLogger("pdf_reports")
@@ -500,7 +503,16 @@ class PDFReport(FPDF,AbstractReport):
                            ['type', 'details.count'],
                            ['type','count'],
                                {},8)
-        self.add_page()
+
+        billing = cluster.get("future", {}).get("billing",None)
+        if not (billing is None):
+            files = plot_sku_monthly_costs(self.config, billing, title="Atlas SKU Monthly Cost Evolution", output_file="sku_costs")
+            print("Generated files:", files)
+            self.add_image(files)
+
+
+        if self.config.get_template("initial_empty_page",True) :
+           self.add_page()
 
 
     def add_table(self, data_list, columns,columns_name=None,col_size_diff={},size=4,line=1,skipIfColumnEmpty=False):

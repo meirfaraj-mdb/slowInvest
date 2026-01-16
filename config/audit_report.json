@@ -4,6 +4,5 @@
   "PRIVATE_KEY": "xxxx-xxx-xx-...",
   "GROUP_ID": "6...",
   "ATLAS_RETRIEVAL_SCOPE" : "clusters",
-  "CLUSTERS_NAME" : ["Cluster0"],
-  "template" : "audit_report"
+  "CLUSTERS_NAME" : ["Cluster0"]
 }

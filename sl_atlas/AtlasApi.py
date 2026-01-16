@@ -3,7 +3,8 @@ import logging
 import re
 import time
 from datetime import datetime
-
+import csv
+import io
 import msgspec
 import requests
 from requests.auth import HTTPDigestAuth
@@ -14,6 +15,8 @@ from sl_async.gzip import BufferedGzipWriter
 from sl_async.slatlas import BufferedSlAtlasSource
 from sl_async.slorch import AsyncExtractAndAggregate
 from sl_utils.utils import remove_extension, createDirs
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 atlas_logging = logging.getLogger("atlas")
 atlas_logging.setLevel(logging.DEBUG)
@@ -68,6 +71,34 @@ class AtlasApi():
             # Catch any request-related errors
             print(f"Request failed for {op}: {e}")
             raise
+    def atlas_request_csv(self, op, fpath, fdate, arg):
+        """
+        Function to request Atlas Admin API returning CSV data.
+        """
+        apiBaseURL = '/api/atlas/v2'
+        url = f"https://cloud.mongodb.com{apiBaseURL}{fpath}"
+        headers = {
+            'Accept': f"application/csv",
+        }
+        try:
+            response = requests.get(
+                url,
+                params=arg,
+                auth=HTTPDigestAuth(self.PUBLIC_KEY, self.PRIVATE_KEY),
+                headers=headers
+            )
+            if response.status_code != 200:
+                print(f"Error in {op}: {response.status_code} - {response.text}")
+                response.raise_for_status()
+
+                # Parse CSV into list of dicts
+            csv_text = response.text
+            reader = csv.DictReader(io.StringIO(csv_text))
+            return list(reader)
+
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed for {op}: {e}")
+            raise
 
     # retrieve slow queries
     def retrieveLast24HSlowQueriesFromCluster(self,groupId,processId,shard, output_file_path, chunk_size=50000,save_by_chunk="none"):
@@ -84,6 +115,113 @@ class AtlasApi():
         orch.run()
         return orch.get_results()
 
+
+    def get_cluster_billing_sku_evolution(self, org_id, cluster_name=None):
+        """
+        Retrieve last 3 months excluding current month, grouped by month and SKU with evolution %.
+        Always uses CSV via two-step Cost Explorer process.
+        """
+        #TOdo :search for orgID in /api/atlas/v2/clusters
+
+        # ---- Step 1: date calculations ----
+        today = datetime.utcnow()
+        first_day_current_month = datetime(today.year, today.month, 1)
+        end_last_month = first_day_current_month - timedelta(days=1)
+        start_range = end_last_month - relativedelta(months=2)
+        start_range = datetime(start_range.year, start_range.month, 1)
+
+        # ---- Step 2: Create cost explorer process ----
+        fdate = "2025-03-12"  # Example version date, update to current Atlas API date format
+        fpath_create = f"/orgs/{org_id}/billing/costExplorer/usage/process"
+
+        body = {
+            "startDate": start_range.strftime("%Y-%m-%d"),
+            "endDate": end_last_month.strftime("%Y-%m-%d"),
+            "granularity": "MONTH",
+            "groupBy": ["SKU"],
+        }
+        if cluster_name:
+            body["clusterName"] = cluster_name
+
+        create_resp = self.atlas_request(
+            "Create Cost Explorer Process", "POST", fpath_create, fdate, body=body
+        )
+        process_id = create_resp.get("id")
+        if not process_id:
+            raise RuntimeError("No process ID returned from Cost Explorer create request.")
+
+            # ---- Step 3: Poll until ready ----
+        ready = False
+        fpath_status = f"/orgs/{org_id}/billing/costExplorer/usage/process/{process_id}"
+        for _ in range(30):  # max ~60 seconds
+            status_resp = self.atlas_request(
+                "Check Cost Explorer Process Status", "GET", fpath_status, fdate
+            )
+            if status_resp.get("status") == "COMPLETED":
+                ready = True
+                break
+            elif status_resp.get("status") == "FAILED":
+                raise RuntimeError("Cost Explorer process failed.")
+            time.sleep(2)
+
+        if not ready:
+            raise TimeoutError("Cost Explorer process not ready after polling.")
+
+            # ---- Step 4: Download CSV ----
+        fpath_csv = f"/orgs/{org_id}/billing/costExplorer/usage/process/{process_id}/csv"
+        csv_data = self.atlas_request_csv(
+            "Download Cost Explorer CSV", fpath_csv, fdate
+        )
+
+        # ---- Step 5: Transform into monthly SKU evolution output ----
+        month_data = defaultdict(lambda: {"totalcost": 0, "sku": {}})
+        for row in csv_data:
+            period = row["date"][:7].replace("-", "/")
+            sku = row["sku"]
+            cost = float(row.get("cost", 0) or 0)
+            month_data[period]["totalcost"] += cost
+            month_data[period]["sku"][sku] = {"cost": cost}
+
+        months_sorted = sorted(month_data.keys())
+        if not months_sorted:
+            return {}
+
+        range_start_month = months_sorted[0]
+        for i, month in enumerate(months_sorted):
+            totalcost = month_data[month]["totalcost"]
+            for sku in month_data[month]["sku"]:
+                cost_val = month_data[month]["sku"][sku]["cost"]
+
+                # Percent of monthly total
+                month_data[month]["sku"][sku]["percent_monthly_cost"] = (
+                    round(cost_val / totalcost * 100, 2) if totalcost else 0
+                )
+
+                # Evolution from previous month
+                if i > 0:
+                    prev_sku_cost = month_data[months_sorted[i-1]]["sku"].get(sku, {}).get("cost", 0)
+                    month_data[month]["sku"][sku]["evolution_previous_month_in_perc"] = (
+                        round((cost_val - prev_sku_cost) / prev_sku_cost * 100, 2) if prev_sku_cost else None
+                    )
+
+                    # Evolution from start
+                start_sku_cost = month_data[range_start_month]["sku"].get(sku, {}).get("cost", 0)
+                month_data[month]["sku"][sku]["evolution_from_range_start_in_perc"] = (
+                    round((cost_val - start_sku_cost) / start_sku_cost * 100, 2) if start_sku_cost else None
+                )
+
+                # Month total evolutions
+            if i > 0:
+                prev_total = month_data[months_sorted[i-1]]["totalcost"]
+                month_data[month]["evolution_previous_month_in_perc"] = (
+                    round((totalcost - prev_total) / prev_total * 100, 2) if prev_total else None
+                )
+            start_total = month_data[range_start_month]["totalcost"]
+            month_data[month]["evolution_from_range_start_in_perc"] = (
+                round((totalcost - start_total) / start_total * 100, 2) if start_total else None
+            )
+
+        return dict(month_data)
 
     def listAllProject(self):
         resp=self.atlas_request("GetAllProject",
@@ -611,7 +749,7 @@ class AtlasApi():
 
 
 # missing
-    def get_clusters_composition(self,group_id=None,cluster_name=None,full=True,scaling_start_date=None,scaling_num_month=None):
+    def get_clusters_composition(self,group_id=None,cluster_name=None,full=True,scaling_start_date=None,scaling_num_month=None,orgId=None):
         result=[]
 
         #Group_id None not yet supported
@@ -644,6 +782,8 @@ class AtlasApi():
                 cluster["future"]["backup_snapshot"] = pool.submit(self.listAllBackupSnapshotForCluster,group_id,cluster_name,cluster["clusterType"])
                 cluster["future"]["advancedConfiguration"] = pool.submit(self.getAdvancedConfigurationForOneCluster,group_id, cluster_name)
                 cluster["future"]["scaling"] = pool.submit(self.getAutoScalingEvent,group_id,[cluster_name],scaling_start_date,scaling_num_month)
+                cluster["future"]["billing"] = pool.submit(self.get_cluster_billing_sku_evolution, orgId, group_id, cluster_name)
+
 
             replicationSpecs = cluster.get('replicationSpecs',None)
             providersSet = set()
