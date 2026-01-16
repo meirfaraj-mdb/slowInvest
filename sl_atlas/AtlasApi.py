@@ -47,7 +47,8 @@ class AtlasApi():
 
     #------------------------------------------------------------------------------------
     # Function for extracting from Api
-    def atlas_request(self, op, fpath, fdate, arg):
+
+    def atlas_request(self, op, fpath, fdate, arg=None, req_type="GET", body=None):
         apiBaseURL = '/api/atlas/v2'
         url = f"https://cloud.mongodb.com{apiBaseURL}{fpath}"
         headers = {
@@ -55,22 +56,36 @@ class AtlasApi():
             'Content-Type': f"application/vnd.atlas.{fdate}+json"
         }
         try:
-            response = requests.get(
-                url,
-                params=arg,
-                auth=HTTPDigestAuth(self.PUBLIC_KEY, self.PRIVATE_KEY),
-                headers=headers
-            )
-            # Check if the response was successful
-            if response.status_code != 200:
+            if req_type.upper() == "GET":
+                response = requests.get(
+                    url,
+                    params=arg,
+                    auth=HTTPDigestAuth(self.PUBLIC_KEY, self.PRIVATE_KEY),
+                    headers=headers
+                )
+            elif req_type.upper() == "POST":
+                response = requests.post(
+                    url,
+                    params=arg,
+                    json=body,  # FIX: Send JSON properly
+                    auth=HTTPDigestAuth(self.PUBLIC_KEY, self.PRIVATE_KEY),
+                    headers=headers
+                )
+            else:
+                raise ValueError(f"Unsupported request type: {req_type}")
+
+                # Check if the response was successful
+            if response.status_code not in (200, 201):
                 print(f"Error in {op}: {response.status_code} - {response.text}")
-                response.raise_for_status()  # This will raise an HTTPError for bad responses
-            #print(f"{op} response: {response.text}")
+                response.raise_for_status()  # Raise for non-OK responses
+
             return decoder.decode(response.text)
+
         except requests.exceptions.RequestException as e:
-            # Catch any request-related errors
             print(f"Request failed for {op}: {e}")
             raise
+
+
     def atlas_request_csv(self, op, fpath, fdate, arg):
         """
         Function to request Atlas Admin API returning CSV data.
@@ -78,7 +93,8 @@ class AtlasApi():
         apiBaseURL = '/api/atlas/v2'
         url = f"https://cloud.mongodb.com{apiBaseURL}{fpath}"
         headers = {
-            'Accept': f"application/csv",
+            'Accept': f"application/vnd.atlas.{fdate}+csv",
+            'Content-Type': f"application/vnd.atlas.{fdate}+csv"
         }
         try:
             response = requests.get(
@@ -122,6 +138,9 @@ class AtlasApi():
         Always uses CSV via two-step Cost Explorer process.
         """
         #TOdo :search for orgID in /api/atlas/v2/clusters
+        if org_id is None :
+            print(f"Org not provided no yet orgId disco")
+            return None
 
         # ---- Step 1: date calculations ----
         today = datetime.utcnow()
@@ -131,8 +150,8 @@ class AtlasApi():
         start_range = datetime(start_range.year, start_range.month, 1)
 
         # ---- Step 2: Create cost explorer process ----
-        fdate = "2025-03-12"  # Example version date, update to current Atlas API date format
-        fpath_create = f"/orgs/{org_id}/billing/costExplorer/usage/process"
+        fdate = "2025-03-12"
+        fpath_create = f"/orgs/{org_id}/billing/costExplorer/usage"
 
         body = {
             "startDate": start_range.strftime("%Y-%m-%d"),
@@ -144,18 +163,18 @@ class AtlasApi():
             body["clusterName"] = cluster_name
 
         create_resp = self.atlas_request(
-            "Create Cost Explorer Process", "POST", fpath_create, fdate, body=body
+            "Create Cost Explorer Process",  fpath_create, fdate,req_type="POST", body=body
         )
-        process_id = create_resp.get("id")
-        if not process_id:
-            raise RuntimeError("No process ID returned from Cost Explorer create request.")
+        token = create_resp.get("token")
+        if not token:
+            raise RuntimeError("No token returned from Cost Explorer create request.")
 
             # ---- Step 3: Poll until ready ----
         ready = False
-        fpath_status = f"/orgs/{org_id}/billing/costExplorer/usage/process/{process_id}"
+        fpath_status = f"/orgs/{org_id}/billing/costExplorer/usage/{token}"
         for _ in range(30):  # max ~60 seconds
             status_resp = self.atlas_request(
-                "Check Cost Explorer Process Status", "GET", fpath_status, fdate
+                "Check Cost Explorer Process Status", fpath_status, fdate
             )
             if status_resp.get("status") == "COMPLETED":
                 ready = True
@@ -168,7 +187,7 @@ class AtlasApi():
             raise TimeoutError("Cost Explorer process not ready after polling.")
 
             # ---- Step 4: Download CSV ----
-        fpath_csv = f"/orgs/{org_id}/billing/costExplorer/usage/process/{process_id}/csv"
+        fpath_csv = f"/orgs/{org_id}/billing/costExplorer/usage/{token}/csv"
         csv_data = self.atlas_request_csv(
             "Download Cost Explorer CSV", fpath_csv, fdate
         )
@@ -911,8 +930,9 @@ class AtlasApi():
             cluster[f"{name}_configured"]="Fail to retrieve"
             cluster[f"{name}_count"]=0
         else:
-            cluster[f"{name}_configured"]="True" if len(cluster[name])>0 else "False"
-            cluster[f"{name}_count"]=len(cluster[name])
+            elem=cluster.get(name, None);
+            cluster[f"{name}_count"]=len(elem) if not (elem is None) and len(elem) > 0 else 0
+            cluster[f"{name}_configured"]="True" if cluster.get(f"{name}_count",0) > 0 else "False"
         del cluster["future"][name]
 
 

@@ -647,7 +647,7 @@
                 "MAX_SYSTEM_CPU_IRQ",
                 "MAX_SYSTEM_CPU_SOFTIRQ",
                 "MAX_SYSTEM_CPU_GUEST",
-                "MAX_SYSTEM_CPU_STEAL",
+                "MAX_SYSTEM_CPU_STEAL"
               ]
             },
             "NORMALIZED_SYSTEM_CPU": {
