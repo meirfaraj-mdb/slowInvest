@@ -130,6 +130,20 @@
       "replication_specs" : {
         "include" : true
       }
+    },
+    "cluster": {
+      "per_node": {
+        "graph": {
+          "metrics": [
+            "NORMALIZED_SYSTEM_CPU",
+            "CACHE",
+            "STORAGE",
+            "OPCOUNTERS_PRIMARY",
+            "OPERATIONS",
+            "OPLOG"
+          ]
+        }
+      }
     }
   }
 }

@@ -175,41 +175,55 @@ def createGraphByDb(config, result, prefix,  all_plot_args):
     createGraphBy(config, result, 'db', prefix,  all_plot_args)
 
 def createAndInsertGraphs(config, prefix, report, result):
-    if not config.INSERT_GRAPH_SUMMARY_TO_REPORT:
+    """
+    Create graphs in parallel and insert them into the report PDF.
+    Only add subtitle + move cursor down on the last graph.
+    """
+    if not getattr(config, "INSERT_GRAPH_SUMMARY_TO_REPORT", False):
         return
 
-    report.subChapter_title("Graphics")
+    if report:
+        report.subChapter_title("Graphics")
 
-    # Collect all plot arguments
+        # Collect all plot arguments
     all_plot_args = []
-    createGraphByDb(config, result, prefix,  all_plot_args)
-    createGraphByNamespace(config, result, prefix,  all_plot_args)
+    createGraphByDb(config, result, prefix, all_plot_args)
+    createGraphByNamespace(config, result, prefix, all_plot_args)
 
     # Step 1: Generate all graphs concurrently
     plot_results = parallel_plot_tasks(all_plot_args)
 
-    # Step 2: Integrate all generated graphs into the report in order
-    for args,file_paths in plot_results:
-        if (file_paths is not None and len(file_paths)==0) or (file_paths is None):
-           if report:
-                report.chapter_body(f"No {args[3]} to present as graph")
-           continue
+    total_graphs = len(plot_results)
+
+    # Step 2: Insert graphs into report
+    for idx, (args, file_paths) in enumerate(plot_results):
+        title = args[3] if len(args) > 3 else "Graph"
+
+        # Handle missing or empty results
+        if not file_paths:
+            if report:
+                report.chapter_body(f"No {title} to present as graph")
+            continue
+
         if report:
-            report.addpage()
-            report.sub2Chapter_title(args[3])
-            report.add_image(file_paths[0])
+            # Only move cursor down if this is the last graph
+            move_down_flag = (idx == total_graphs - 1)
 
-        for file_path in file_paths:
-            # Optionally delete the images after usage
-            if config.DELETE_IMAGE_AFTER_USED and os.path.exists(file_path):
-                os.remove(file_path)
-                print(f"{file_path} has been deleted.")
+            img_path = file_paths[0]
+            report.add_image(img_path, move_cursor_down=move_down_flag,aspect_ratio= 1)
+
+            # Step 3: Cleanup images if configured
+        if getattr(config, "DELETE_IMAGE_AFTER_USED", False):
+            for file_path in file_paths:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    print(f"{file_path} has been deleted.")
 
 
 
 
 
-# Function to plot each metric
+                # Function to plot each metric
 def plot_metric(process,metric_name, timestamps, values,prefix):
     plt.figure(figsize=(5, 5))
     plt.plot(timestamps, values, marker='o')
@@ -227,6 +241,10 @@ def plot_metric(process,metric_name, timestamps, values,prefix):
 from datetime import datetime
 
 def plot_all_metricsForProcess(process, report, config, prefix):
+    """
+    Plot all defined metrics for the given process.
+    Only add subtitle and move cursor down for the last graph in the sequence.
+    """
     measurements_future = process.get("future", {}).get("measurement", None)
     if measurements_future is None:
         return
@@ -237,13 +255,39 @@ def plot_all_metricsForProcess(process, report, config, prefix):
     if report:
         report.sub2Chapter_title("Metrics graph")
 
-        # Get list of group names
-    list_of_groups = config.get_template("sections.cluster.per_node.graph.metrics",[])
-    group_defs = config.get_template("sections.cluster.per_node.graph.group_of_metrics",{})
+    # Get list of group names from config
+    list_of_groups = config.get_template("sections.cluster.per_node.graph.metrics", [])
+    group_defs = config.get_template("sections.cluster.per_node.graph.group_of_metrics", {})
 
-    # Build a dict for easy access {metric_name: measurement_dict}
+    # Map metric name -> measurement dict for faster lookups
     measurements_map = {m["name"]: m for m in measurements.get("measurements", [])}
 
+    # Determine the last group with data so we can mark it
+    valid_groups = []
+    for group_name in list_of_groups:
+        group_info = group_defs.get(group_name, {})
+        metric_list = group_info.get("list_of_metrics", [])
+
+        any_valid_data = False
+        for metric_name in metric_list:
+            measurement = measurements_map.get(metric_name)
+            if not measurement:
+                continue
+            data_points = measurement["dataPoints"]
+            if any(dp['value'] is not None and dp['value'] != 0 for dp in data_points):
+                any_valid_data = True
+                break
+
+        if any_valid_data:
+            valid_groups.append(group_name)
+
+    if not valid_groups:
+        print("No metrics available for plotting.")
+        return
+
+    last_group = valid_groups[-1]  # The last group with actual data
+
+    # Loop over each group again to actually plot
     for group_name in list_of_groups:
         group_info = group_defs.get(group_name, {})
         metric_list = group_info.get("list_of_metrics", [])
@@ -258,27 +302,23 @@ def plot_all_metricsForProcess(process, report, config, prefix):
                 continue
 
             data_points = measurement["dataPoints"]
-            filtered_data = [(dp['timestamp'], dp['value'])
-                             for dp in data_points
-                             if dp['value'] is not None and dp['value'] != 0]
 
-            if filtered_data:  # Non-zero and non-null data exists
+            # Filter non-zero and non-null
+            if any(dp['value'] is not None and dp['value'] != 0 for dp in data_points):
                 any_valid_data = True
 
-                # Always store not-null data for plotting if group has any valid metric
-            not_none_data = [(dp['timestamp'], dp['value'])
-                             for dp in data_points if dp['value'] is not None]
-
+                # Always store not-null data for plotting
+            not_none_data = [(dp['timestamp'], dp['value']) for dp in data_points if dp['value'] is not None]
             if not_none_data:
                 timestamps, values = zip(*not_none_data)
                 timestamps = [datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ") for ts in timestamps]
                 group_timestamps_values[metric_name] = (timestamps, values)
 
-                # Now plot if at least one metric in the group had valid non-zero, non-null data
         if any_valid_data:
             file = plot_metric_group(process, group_name, group_timestamps_values, prefix)
             if report:
-                report.add_image(file)
+                move_down_flag = (group_name == last_group)
+                report.add_image(file, move_cursor_down=move_down_flag)
         else:
             print(f"Skipped group {group_name} as all metrics are None or zero.")
 
@@ -288,7 +328,7 @@ def plot_metric_group(process, group_name, metrics_data, prefix):
     metrics_data: dict {metric_name: (timestamps, values)}
     Plot multiple metrics on the same figure and return file name.
     """
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(10, 10))
     for metric_name, (timestamps, values) in metrics_data.items():
         plt.plot(timestamps, values, label=metric_name)
 

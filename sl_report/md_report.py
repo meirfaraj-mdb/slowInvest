@@ -189,7 +189,7 @@ class MDReport(AbstractReport):
                            )
 
 
-    def add_image(self, image_path):
+    def add_image(self, image_path, move_cursor_down,aspect_ratio=1):
         self.add_image_md(image_path,"","")
 
 

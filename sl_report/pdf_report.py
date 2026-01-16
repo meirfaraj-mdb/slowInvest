@@ -513,6 +513,8 @@ class PDFReport(FPDF,AbstractReport):
 
         if self.config.get_template("initial_empty_page",True) :
            self.add_page()
+        else:
+           self.ln(1)
 
 
     def add_table(self, data_list, columns,columns_name=None,col_size_diff={},size=4,line=1,skipIfColumnEmpty=False):
@@ -627,35 +629,72 @@ class PDFReport(FPDF,AbstractReport):
         self.multi_cell(0, 5, code, 0, 'L', True)
         self.ln()
 
-    def add_image(self, image_path, img_width=None, padding=2):
-        """Add an image to the PDF. If enough space remains in the row, place it next to the current image."""
+    def update_position_after_image(self, img_height, padding=2):
+        """
+        Move the PDF cursor down after placing an image,
+        so the next text or image starts below it.
+        """
+        current_y = self.get_y()
+        new_y = current_y + img_height + padding
+
+        # Check if it fits on the current page
+        available_height = self.page_break_trigger - current_y
+        if img_height + padding > available_height:
+            # Not enough space -> start on a new page
+            self.add_page()
+            new_y = self.get_y()
+
+        self.set_xy(self.l_margin, new_y)
+
+    def add_image(self, image_path, img_width=None, padding=2, move_cursor_down=True, aspect_ratio=1):
+        """
+        Add an image to the PDF.
+        If aspect_ratio is provided, the height is calculated using this ratio instead of guessing.
+        """
         try:
-            self.set_text_color(0, 0, 0)  # Black text
-            # Width for image: default to half of effective page width
+            self.set_text_color(0, 0, 0)
+
             if img_width is None:
-                img_width = self.epw / 2.5
+                img_width = self.epw / 3.5
+
+                # Calculate image height
+            if aspect_ratio:
+                img_height = img_width * aspect_ratio
+            else:
+                img_height = img_width * 1  # fallback ratio if not given
 
             current_x = self.get_x()
             current_y = self.get_y()
 
-            # Does the image fit in remaining width?
+            # Vertical space check
+            available_height = self.page_break_trigger - current_y
+            if img_height + padding > available_height:
+                self.add_page()
+                current_x = self.l_margin
+                current_y = self.get_y()
+
+                # Horizontal fit check
             remaining_width = self.epw - (current_x - self.l_margin)
             if img_width <= remaining_width:
-                # Fits, place it here
                 self.image(image_path, x=current_x, y=current_y, w=img_width, keep_aspect_ratio=True)
-                # Move X for next image, with padding
                 self.set_x(current_x + img_width + padding)
             else:
-                # Not enough space, move to next line
-                # Find tallest image height in row? Here we just jump down by img_width ratio
-                img_height = img_width * 0.75  # approximate height (depends on aspect ratio)
                 self.set_xy(self.l_margin, current_y + img_height + padding)
-                self.image(image_path, x=self.get_x(), y=self.get_y(), w=img_width, keep_aspect_ratio=True)
+                current_y = self.get_y()
+                available_height = self.page_break_trigger - current_y
+                if img_height + padding > available_height:
+                    self.add_page()
+                    current_y = self.get_y()
+                    self.set_x(self.l_margin)
+                self.image(image_path, x=self.get_x(), y=current_y, w=img_width, keep_aspect_ratio=True)
                 self.set_x(self.get_x() + img_width + padding)
 
-        except Exception:
-            pdf_reports_logging.exception(f"Fail to add image: {image_path}")
-            #self.ln(10)
+                # Move cursor below image if requested
+            if move_cursor_down:
+                self.update_position_after_image(img_height, padding)
+
+        except Exception as e:
+            print(f"Failed to add image: {e}")
 
 
     def add_colored_json(self, json_data, w=None):

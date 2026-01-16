@@ -782,7 +782,7 @@ class AtlasApi():
                 cluster["future"]["backup_snapshot"] = pool.submit(self.listAllBackupSnapshotForCluster,group_id,cluster_name,cluster["clusterType"])
                 cluster["future"]["advancedConfiguration"] = pool.submit(self.getAdvancedConfigurationForOneCluster,group_id, cluster_name)
                 cluster["future"]["scaling"] = pool.submit(self.getAutoScalingEvent,group_id,[cluster_name],scaling_start_date,scaling_num_month)
-                cluster["future"]["billing"] = pool.submit(self.get_cluster_billing_sku_evolution, orgId, group_id, cluster_name)
+                cluster["future"]["billing"] = pool.submit(self.get_cluster_billing_sku_evolution, orgId, cluster_name)
 
 
             replicationSpecs = cluster.get('replicationSpecs',None)

@@ -11,7 +11,7 @@ from sl_utils.utils import createDirs
 decoder = msgspec.json.Decoder()
 
 # Initial basic logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 # ----------- Utility to load config with error handling ----------

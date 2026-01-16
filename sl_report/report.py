@@ -117,9 +117,9 @@ class Report(AbstractReport):
         for report in self.reports:
             report.add_code_box(code)
 
-    def add_image(self, image_path):
+    def add_image(self, image_path, move_cursor_down=False,aspect_ratio=1):
         for report in self.reports:
-            report.add_image(image_path)
+            report.add_image(image_path, move_cursor_down=move_cursor_down,aspect_ratio=aspect_ratio)
 
     def addpage(self):
         for report in self.reports:
