@@ -158,7 +158,7 @@ class AtlasApi():
             "startDate": start_range.strftime("%Y-%m-%d"),
             "endDate": end_last_month.strftime("%Y-%m-%d"),
             "granularity": "MONTH",
-            "groupBy": ["SKU"],
+            "groupBy": ["services"],
         }
         if cluster_name:
             body["clusterName"] = cluster_name
