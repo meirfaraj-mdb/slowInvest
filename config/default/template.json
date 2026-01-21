@@ -457,18 +457,20 @@
                 "ASSERT_USER"
               ]
             },
-
             "CACHE": {
               "list_of_metrics": [
                 "CACHE_BYTES_READ_INTO",
                 "CACHE_BYTES_WRITTEN_FROM",
                 "CACHE_DIRTY_BYTES",
-                "CACHE_USED_BYTES",
+                "CACHE_USED_BYTES"
+              ]
+            },
+            "CACHE_RATIO": {
+              "list_of_metrics": [
                 "CACHE_FILL_RATIO",
                 "DIRTY_FILL_RATIO"
               ]
             },
-
             "CONNECTIONS_AND_CURSORS": {
               "list_of_metrics": [
                 "CONNECTIONS",
@@ -476,7 +478,6 @@
                 "CURSORS_TOTAL_TIMED_OUT"
               ]
             },
-
             "STORAGE": {
               "list_of_metrics": [
                 "DB_STORAGE_TOTAL",
@@ -485,7 +486,6 @@
                 "DB_INDEX_SIZE_TOTAL"
               ]
             },
-
             "DOCUMENT_ACTIVITY": {
               "list_of_metrics": [
                 "DOCUMENT_METRICS_RETURNED",
@@ -552,7 +552,6 @@
                 "OPERATIONS_QUERIES_KILLED"
               ]
             },
-
             "OP_EXECUTION_TIMES": {
               "list_of_metrics": [
                 "OP_EXECUTION_TIME_READS",
@@ -560,14 +559,16 @@
                 "OP_EXECUTION_TIME_COMMANDS"
               ]
             },
-
             "OPLOG": {
               "list_of_metrics": [
-                "OPLOG_MASTER_TIME",
-                "OPLOG_RATE_GB_PER_HOUR"
+                "OPLOG_MASTER_TIME"
               ]
             },
-
+            "OPLOG_MASTER_TIME": {
+              "list_of_metrics": [
+                "OPLOG_MASTER_TIME"
+              ]
+            },
             "QUERY_EXECUTION": {
               "list_of_metrics": [
                 "QUERY_EXECUTOR_SCANNED",
@@ -576,47 +577,54 @@
                 "QUERY_TARGETING_SCANNED_OBJECTS_PER_RETURNED"
               ]
             },
-
             "READ_WRITE_TICKETS": {
               "list_of_metrics": [
                 "TICKETS_AVAILABLE_READS",
                 "TICKETS_AVAILABLE_WRITE"
               ]
             },
-
             "OPERATION_THROTTLING": {
               "list_of_metrics": [
                 "OPERATION_THROTTLING_REJECTED_OPERATIONS"
               ]
             },
-
             "QUERY_SPILL_SORT": {
               "list_of_metrics": [
                 "QUERY_SPILL_TO_DISK_DURING_SORT"
               ]
             },
-
             "PROCESS_CPU": {
               "list_of_metrics": [
                 "PROCESS_CPU_USER",
                 "PROCESS_CPU_KERNEL",
                 "PROCESS_CPU_CHILDREN_USER",
-                "PROCESS_CPU_CHILDREN_KERNEL",
+                "PROCESS_CPU_CHILDREN_KERNEL"
+              ]
+            },
+            "NORMALIZED_PROCESS_CPU": {
+              "list_of_metrics": [
                 "PROCESS_NORMALIZED_CPU_USER",
                 "PROCESS_NORMALIZED_CPU_KERNEL",
                 "PROCESS_NORMALIZED_CPU_CHILDREN_USER",
-                "PROCESS_NORMALIZED_CPU_CHILDREN_KERNEL",
+                "PROCESS_NORMALIZED_CPU_CHILDREN_KERNEL"
+              ]
+            },
+            "MAX_PROCESS_CPU": {
+              "list_of_metrics": [
                 "MAX_PROCESS_CPU_USER",
                 "MAX_PROCESS_CPU_KERNEL",
                 "MAX_PROCESS_CPU_CHILDREN_USER",
-                "MAX_PROCESS_CPU_CHILDREN_KERNEL",
+                "MAX_PROCESS_CPU_CHILDREN_KERNEL"
+              ]
+            },
+            "MAX_NORMALIZED_PROCESS_CPU": {
+              "list_of_metrics": [
                 "MAX_PROCESS_NORMALIZED_CPU_USER",
                 "MAX_PROCESS_NORMALIZED_CPU_KERNEL",
                 "MAX_PROCESS_NORMALIZED_CPU_CHILDREN_USER",
                 "MAX_PROCESS_NORMALIZED_CPU_CHILDREN_KERNEL"
               ]
             },
-
             "FTS_PROCESS": {
               "list_of_metrics": [
                 "FTS_PROCESS_RESIDENT_MEMORY",
@@ -629,7 +637,6 @@
                 "FTS_PROCESS_NORMALIZED_CPU_KERNEL"
               ]
             },
-
             "SYSTEM_CPU": {
               "list_of_metrics": [
                 "SYSTEM_CPU_USER",
@@ -639,7 +646,11 @@
                 "SYSTEM_CPU_IRQ",
                 "SYSTEM_CPU_SOFTIRQ",
                 "SYSTEM_CPU_GUEST",
-                "SYSTEM_CPU_STEAL",
+                "SYSTEM_CPU_STEAL"
+              ]
+            },
+            "MAX_SYSTEM_CPU": {
+              "list_of_metrics": [
                 "MAX_SYSTEM_CPU_USER",
                 "MAX_SYSTEM_CPU_KERNEL",
                 "MAX_SYSTEM_CPU_NICE",
@@ -659,7 +670,11 @@
                 "SYSTEM_NORMALIZED_CPU_IRQ",
                 "SYSTEM_NORMALIZED_CPU_SOFTIRQ",
                 "SYSTEM_NORMALIZED_CPU_GUEST",
-                "SYSTEM_NORMALIZED_CPU_STEAL",
+                "SYSTEM_NORMALIZED_CPU_STEAL"
+              ]
+            },
+            "MAX_NORMALIZED_SYSTEM_CPU": {
+              "list_of_metrics": [
                 "MAX_SYSTEM_NORMALIZED_CPU_USER",
                 "MAX_SYSTEM_NORMALIZED_CPU_KERNEL",
                 "MAX_SYSTEM_NORMALIZED_CPU_NICE",
@@ -670,7 +685,6 @@
                 "MAX_SYSTEM_NORMALIZED_CPU_STEAL"
               ]
             },
-
             "SYSTEM_NETWORK": {
               "list_of_metrics": [
                 "SYSTEM_NETWORK_IN",
@@ -688,7 +702,6 @@
                 "MAX_SWAP_IO_OUT"
               ]
             },
-
             "SYSTEM_MEMORY": {
               "list_of_metrics": [
                 "SYSTEM_MEMORY_USED",
@@ -696,20 +709,27 @@
                 "SYSTEM_MEMORY_FREE",
                 "SYSTEM_MEMORY_SHARED",
                 "SYSTEM_MEMORY_CACHED",
-                "SYSTEM_MEMORY_BUFFERS",
-                "SWAP_USAGE_USED",
-                "SWAP_USAGE_FREE",
+                "SYSTEM_MEMORY_BUFFERS"
+              ]
+            },
+            "MAX_SYSTEM_MEMORY": {
+              "list_of_metrics": [
                 "MAX_SYSTEM_MEMORY_USED",
                 "MAX_SYSTEM_MEMORY_AVAILABLE",
                 "MAX_SYSTEM_MEMORY_FREE",
                 "MAX_SYSTEM_MEMORY_SHARED",
                 "MAX_SYSTEM_MEMORY_CACHED",
-                "MAX_SYSTEM_MEMORY_BUFFERS",
+                "MAX_SYSTEM_MEMORY_BUFFERS"
+              ]
+            },
+            "SWAP": {
+              "list_of_metrics": [
+                "SWAP_USAGE_USED",
+                "SWAP_USAGE_FREE",
                 "MAX_SWAP_USAGE_USED",
                 "MAX_SWAP_USAGE_FREE"
               ]
             }
-
           },
 
           "metrics": [

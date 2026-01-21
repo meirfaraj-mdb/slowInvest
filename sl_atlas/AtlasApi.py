@@ -78,7 +78,8 @@ class AtlasApi():
             if response.status_code not in (200, 201):
                 print(f"Error in {op}: {response.status_code} - {response.text}")
                 response.raise_for_status()  # Raise for non-OK responses
-
+            if op == "Create Cost Explorer Process" or op =="Check Cost Explorer Process Status":
+                print(f"{op} : resp : {response.text}")
             return decoder.decode(response.text)
 
         except requests.exceptions.RequestException as e:
@@ -165,6 +166,7 @@ class AtlasApi():
         create_resp = self.atlas_request(
             "Create Cost Explorer Process",  fpath_create, fdate,req_type="POST", body=body
         )
+
         token = create_resp.get("token")
         if not token:
             raise RuntimeError("No token returned from Cost Explorer create request.")
@@ -714,6 +716,33 @@ class AtlasApi():
             )
             return resp
 
+    def getAllDiskforProcess(self,group_id,process_id):
+        resp = self.atlas_request(
+            "get_disks_for_process",
+            f"/groups/{group_id}/processes/{process_id}/disks",
+            "2025-03-12"
+        )
+        return resp
+
+    def getDiskMeasurementforProcess(self,group_id,process_id,partitionName):
+        resp = self.atlas_request(
+            "get_database_for_process",
+            f"/groups/{group_id}/processes/{process_id}/disks/{partitionName}/measurements",
+            "2023-01-01",
+            {
+                'period': 'PT24H',
+                'granularity': 'PT1M',
+            }
+        )
+        return resp
+
+
+    def getAllDiskMetricsforProcess(self,group_id,process_id):
+        disks = self.getAllDiskforProcess(group_id,process_id)
+        disks = disks.get("results",[])
+        ##{'...'results': [{'links': [ 'partitionName': 'data'}], 'totalCount': 1}
+       # for disk in disks:
+       #     c
 
     def get_database_for_process(self, group_id, process_id):
         all_results = []
@@ -832,7 +861,12 @@ class AtlasApi():
             if full:
                 process["future"]=process.get("future",{})
                 process["future"]["measurement"] = pool.submit(self.getAllMeasurementforProcess,group_id, process.get("id",None))
+                process["future"]["disk_measurement"] = pool.submit(self.getAllDiskMetricsforProcess,group_id, process.get("id",None))
+
+
+
             pattern_config = r"(.+)-(config)-(\d+)-(\d+)"
+
             match_config = re.match(pattern_config, user_alias)
             if match_config:
                 cluster_name = match_config.group(1)

@@ -16,7 +16,7 @@
       "start_date": null,
       "num_months": 1
     },
-    "take_from" : "24H"
+    "take_from" : "PT24H"
   },
   "INSERT_GRAPH_SUMMARY_TO_REPORT" : false,
   "template" : "audit_report"

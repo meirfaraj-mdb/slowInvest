@@ -136,8 +136,11 @@
         "graph": {
           "metrics": [
             "NORMALIZED_SYSTEM_CPU",
+            "MAX_NORMALIZED_SYSTEM_CPU",
+            "SYSTEM_MEMORY",
             "CACHE",
             "STORAGE",
+            "DISK_IOPS",
             "OPCOUNTERS_PRIMARY",
             "OPERATIONS",
             "OPLOG"

@@ -107,7 +107,7 @@
         }
       ]
     },
-    "take_report_date_from": {
+    "take_from": {
       "type": "string",
       "desc": "what time to take the report from",
       "choices": [
@@ -121,7 +121,7 @@
         }
       ]
     },
-    "take_report_date_to": {
+    "take_to": {
       "type": "string",
       "desc": "what time to end take the report to",
       "choices": [

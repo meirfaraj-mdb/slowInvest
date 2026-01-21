@@ -3,7 +3,7 @@ import logging
 from fpdf import *
 from fpdf.enums import XPos,YPos
 from fpdf.pattern import shape_linear_gradient
-
+import re
 from sl_plot.graphs import plot_sku_monthly_costs
 from sl_report.report import AbstractReport
 from sl_utils.utils import *
@@ -697,7 +697,37 @@ class PDFReport(FPDF,AbstractReport):
             print(f"Failed to add image: {e}")
 
 
-    def add_colored_json(self, json_data, w=None):
+    def estimate_size_not_pretty(self,html_content,w):
+        # --- Height estimation ---
+        # Get plain text without HTML tags for wrapping calculation
+        plain_text = re.sub(r"<.*?>", "", html_content)
+
+        # Estimate average character width in mm (Courier is monospaced)
+        char_width_mm = self.get_string_width("M")  # width of a capital M as a good char proxy
+
+        if char_width_mm <= 0:
+            char_width_mm = 2  # fallback to ~2mm if something is off
+
+        # How many chars fit in given width
+        chars_per_line = max(1, int(w / char_width_mm))
+
+        # Count real wrapped lines
+        lines_from_wrap = (len(plain_text) // chars_per_line) + 1
+
+        # Also account for explicit HTML line breaks
+        explicit_lines = len(html_content.split("<br>"))
+
+        # Use the max between explicit lines (pretty mode) and wrapped lines (unpretty mode)
+        total_lines = max(explicit_lines, lines_from_wrap)
+
+        # Convert font size (pt) to mm
+        line_height = self.font_size_pt * 0.3528
+
+        # Add padding
+        estimated_height = (total_lines * line_height) + 4
+        return estimated_height
+
+    def add_colored_json(self, json_data, w=None, pretty = False):
         """
         Render colored JSON in a light gray box at the current position,
         with correct multi-page handling. Draws rect first, writes content once.
@@ -728,7 +758,7 @@ class PDFReport(FPDF,AbstractReport):
             else:
                 parsed = json_data
 
-            html_content = self.json_to_html(parsed)
+            html_content = self.json_to_html(parsed,pretty)
 
             # Set font for JSON
             self.set_font("Courier", "", 7)
@@ -737,10 +767,12 @@ class PDFReport(FPDF,AbstractReport):
             start_y = self.get_y()
 
             # --- Height estimation from <br> ---
-            lines = html_content.split("<br>")
-            line_height = self.font_size_pt * 0.3528  # pt to mm
-            estimated_height = (len(lines) * line_height) + 4  # +4mm padding
-
+            if pretty:
+                lines = html_content.split("<br>")
+                line_height = self.font_size_pt * 0.3528  # pt to mm
+                estimated_height = (len(lines) * line_height) + 4  # +4mm padding
+            else :
+                estimated_height =self.estimate_size_not_pretty(html_content,w)
             # If we don't have enough space left, add a page before drawing
             if start_y + estimated_height > self.page_break_trigger:
                 self.add_page()
@@ -753,32 +785,32 @@ class PDFReport(FPDF,AbstractReport):
 
             # --- Write content only once on top of rectangle ---
             self.set_xy(start_x + 2, start_y + 2)  # padding
-            self.write_html(html_content)
+            self.write_html(html_content+"<br>")
 
             # Move cursor below box after content
             self.set_y(start_y + estimated_height)
-
         except Exception as e:
             logging.exception(f"Error rendering JSON in PDF: {e}")
             self.write_html(f"<font color='red'>Invalid JSON: {html.escape(str(e))}</font>")
             self.ln(5)
-
         finally:
             # Restore original font/fill
             self.set_font(orig_font_family, orig_font_style, orig_font_size_pt)
             self.set_fill_color(*orig_fill_color)
 
-    def json_to_html(self, json_data, indent=0):
+    def json_to_html(self, json_data, indent=0, pretty = False):
         # Ensure indent is an integer
         if not isinstance(indent, int):
             raise ValueError("Indent must be an integer.")
         html_output = ""
-        if indent==0 :
+        if indent==0 or (not pretty) :
             indent_space = ""
-        else:
+        else :
             indent_space = "&nbsp;" * (indent * 4)  # Create indentation using &nbsp;
         if isinstance(json_data, dict):
-            html_output += f"{indent_space}<font color='black'>{{</font><br>"
+            html_output += f"{indent_space}<font color='black'>{{</font>"
+            if pretty:
+                html_output += "<br>"
             for key, value in json_data.items():
                 html_output += f"{indent_space}  <font color='darkred'>{key}:</font> "
                 # Format the value based on its type
@@ -787,31 +819,43 @@ class PDFReport(FPDF,AbstractReport):
                 elif isinstance(value, (int, float)):
                     html_output += f"<font color='lightcoral'>{value}</font>"
                 elif isinstance(value, dict):
-                    html_output += "<br>" + self.json_to_html(value, indent + 1)  # Recursive call for nested dicts
+                    if pretty:
+                        html_output += "<br>"
+                    html_output += self.json_to_html(value, indent + 1,pretty=pretty)  # Recursive call for nested dicts
                 elif isinstance(value, list):
-                    html_output += "<br>" + self.json_to_html(value, indent + 1)  # Handle lists
+                    if pretty:
+                        html_output += "<br>"
+                    html_output += self.json_to_html(value, indent + 1,pretty=pretty)  # Handle lists
                 else:
                     html_output += f"<font  color='black'>{value}</font>"  # Fallback for other types
+                if pretty:
+                    html_output += "<br>"
+            html_output += f"{indent_space}<font color='black'>}}</font>"
+            if pretty:
                 html_output += "<br>"
-            html_output += f"{indent_space}<font color='black'>}}</font><br>"
         elif isinstance(json_data, list):
-            html_output += f"{indent_space}<font color='darkred'>[</font><br>"
+            html_output += f"{indent_space}<font color='darkred'>[</font>"
+            if pretty:
+                html_output += "<br>"
             for item in json_data:
                 html_output += f"{indent_space}  "
                 if isinstance(item, dict):
-                    html_output += self.json_to_html(item, indent + 1)
+                    html_output += self.json_to_html(item, indent + 1,pretty=pretty)
                 elif isinstance(item, str):
                     html_output += f"<font color='darkgreen'>{item}</font>"
                 elif isinstance(item, (int, float)):
                     html_output += f"<font color='lightcoral'>{item}</font>"
                 else:
                     html_output += f"<font>{item}</font>"  # Fallback for other types
+            if pretty:
+               html_output += "<br>"
+            html_output += f"{indent_space}<font color='black'>]</font>"
+            if pretty:
                 html_output += "<br>"
-            html_output += f"{indent_space}<font color='black'>]</font><br>"
         return html_output
 
     def add_json(self,json_data):
-        self.add_colored_json(json_data, w=190)
+        self.add_colored_json(json_data, w=190, pretty = False)
 
     def write(self,name):
         print(f"Writing {name}.pdf")
