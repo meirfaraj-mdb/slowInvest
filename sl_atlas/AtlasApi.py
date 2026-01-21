@@ -157,11 +157,10 @@ class AtlasApi():
         body = {
             "startDate": start_range.strftime("%Y-%m-%d"),
             "endDate": end_last_month.strftime("%Y-%m-%d"),
-            "granularity": "MONTH",
-            "groupBy": ["services"],
+            "groupBy": "services",
         }
         if cluster_name:
-            body["clusterName"] = cluster_name
+            body["clusters"]=[cluster_name]
 
         create_resp = self.atlas_request(
             "Create Cost Explorer Process",  fpath_create, fdate,req_type="POST", body=body
@@ -830,7 +829,7 @@ class AtlasApi():
                 cluster["future"]["backup_snapshot"] = pool.submit(self.listAllBackupSnapshotForCluster,group_id,cluster_name,cluster["clusterType"])
                 cluster["future"]["advancedConfiguration"] = pool.submit(self.getAdvancedConfigurationForOneCluster,group_id, cluster_name)
                 cluster["future"]["scaling"] = pool.submit(self.getAutoScalingEvent,group_id,[cluster_name],scaling_start_date,scaling_num_month)
-                cluster["future"]["billing"] = pool.submit(self.get_cluster_billing_sku_evolution, orgId, cluster_name)
+                cluster["future"]["billing"] = pool.submit(self.get_cluster_billing_sku_evolution, orgId, cluster.get('id'))
 
 
             replicationSpecs = cluster.get('replicationSpecs',None)
